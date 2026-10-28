@@ -1,0 +1,6 @@
+{
+  "name": "Smart Classroom – Quản lý phòng học thông minh",
+  "description": "Hệ thống quản lý, giám sát và điều khiển phòng học thông minh dành cho giám thị và quản trị viên",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
