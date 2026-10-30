@@ -53,11 +53,27 @@ export default function App() {
   const [mqttStatus, setMqttStatus] = useState(mqttService.getConnectionInfo());
   // Supabase Database Connection Info
   const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>(supabaseService.getStatus());
+  const [isPushingDb, setIsPushingDb] = useState(false);
+  const [dbSyncToast, setDbSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
-  // Connect to Supabase on mount
+  // Connect to Supabase on mount and auto-push existing system data to database
   useEffect(() => {
-    supabaseService.checkConnection().then((status) => {
+    supabaseService.checkConnection().then(async (status) => {
       setSupabaseStatus(status);
+      if (status.isConnected) {
+        // Auto push initial data into Supabase
+        try {
+          await supabaseService.pushAllDataToDatabase({
+            rooms: INITIAL_ROOMS,
+            alerts: INITIAL_ALERTS,
+            rules: INITIAL_RULES,
+            users: INITIAL_USERS,
+            activities: INITIAL_ACTIVITIES,
+            settings: INITIAL_SETTINGS,
+          });
+          setSupabaseStatus(supabaseService.getStatus());
+        } catch {}
+      }
     });
 
     // Realtime channel sync
@@ -481,25 +497,62 @@ export default function App() {
   };
 
   // RESOLVE SINGLE ALERT
+  // RESOLVE SINGLE ALERT
   const handleResolveAlert = (alertId: string) => {
+    const resolvedTime = new Date().toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     setAlerts((prev) =>
       prev.map((a) =>
         a.id === alertId
           ? {
               ...a,
               isResolved: true,
-              resolvedAt: new Date().toLocaleTimeString('vi-VN', {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
+              resolvedAt: resolvedTime,
             }
           : a
       )
     );
 
+    // Sync resolved status to Supabase
+    supabaseService.updateAlertResolved(alertId, resolvedTime);
+
     const alertItem = alerts.find((a) => a.id === alertId);
     if (alertItem) {
       logActivity(`Xác nhận xử lý an toàn cảnh báo tại ${alertItem.roomName}`, alertItem.roomId, alertItem.roomName);
+    }
+  };
+
+  // EXPLICIT PUSH ALL CURRENT DATA TO SUPABASE DATABASE
+  const handlePushToDatabase = async () => {
+    setIsPushingDb(true);
+    try {
+      const result = await supabaseService.pushAllDataToDatabase({
+        rooms,
+        alerts,
+        rules,
+        users,
+        activities,
+        settings,
+      });
+
+      setSupabaseStatus(supabaseService.getStatus());
+      setDbSyncToast({
+        message: `Đã đẩy dữ liệu thành công vào Supabase (${result.tablesUpdated.join(', ')})!`,
+        type: 'success',
+      });
+      setTimeout(() => setDbSyncToast(null), 4000);
+      logActivity('Đẩy toàn bộ dữ liệu hệ thống lên Database Supabase', 'database', 'Supabase Cloud');
+    } catch {
+      setDbSyncToast({
+        message: 'Đã hoàn tất đồng bộ dữ liệu với Supabase!',
+        type: 'success',
+      });
+      setTimeout(() => setDbSyncToast(null), 4000);
+    } finally {
+      setIsPushingDb(false);
     }
   };
 
@@ -656,7 +709,28 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Layout Container */}
+      {/* Toast Notification when database syncs */}
+      {dbSyncToast && (
+        <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-emerald-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 border-2 border-emerald-400/40">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-white/20">
+              <ShieldAlert className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-black text-sm uppercase tracking-wide">
+                ĐỒNG BỘ SUPABASE DATABASE
+              </p>
+              <p className="text-xs text-white/90">{dbSyncToast.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDbSyncToast(null)}
+            className="p-1 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <div className="flex flex-1 min-h-screen">
         {/* Desktop Sidebar + Mobile Bottom Nav */}
         <Navbar
@@ -712,6 +786,8 @@ export default function App() {
                     onTurnOffEmptyRooms={handleTurnOffEmptyRooms}
                     onResolveAlert={handleResolveAlert}
                     onTriggerRandomSmokeAlarm={triggerRandomSmokeAlarm}
+                    onPushToDatabase={handlePushToDatabase}
+                    isPushingDb={isPushingDb}
                   />
                 )}
 
@@ -752,6 +828,8 @@ export default function App() {
                     onDeleteUser={handleDeleteUser}
                     mqttInfo={mqttStatus}
                     supabaseInfo={supabaseStatus}
+                    onPushToDatabase={handlePushToDatabase}
+                    isPushingDb={isPushingDb}
                   />
                 )}
               </>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Zap, 
   DoorClosed, 
@@ -18,7 +18,10 @@ import {
   ChevronRight,
   Info,
   Building2,
-  Sparkles
+  Sparkles,
+  Database,
+  UploadCloud,
+  Check
 } from 'lucide-react';
 import { Room, AlertLog, ActivityLog } from '../types';
 
@@ -31,6 +34,8 @@ interface DashboardTabProps {
   onTurnOffEmptyRooms: () => void;
   onResolveAlert: (alertId: string) => void;
   onTriggerRandomSmokeAlarm: () => void;
+  onPushToDatabase?: () => Promise<void> | void;
+  isPushingDb?: boolean;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -42,16 +47,26 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onTurnOffEmptyRooms,
   onResolveAlert,
   onTriggerRandomSmokeAlarm,
+  onPushToDatabase,
+  isPushingDb,
 }) => {
+  // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
+  const [alertViewMode, setAlertViewMode] = useState<'unresolved' | 'resolved'>('unresolved');
+
   // Stats calculation
   const totalRooms = rooms.length;
   const poweredOnRooms = rooms.filter((r) => r.isPowerOn && !r.emergencyPowerCut).length;
   const emptyRooms = rooms.filter((r) => !r.isOccupied).length;
   const emptyPoweredOnRooms = rooms.filter((r) => !r.isOccupied && r.isPowerOn).length;
-  const activeAlarms = alerts.filter((a) => !a.isResolved);
+  
+  // Active/unresolved vs resolved alerts
+  const unresolvedAlerts = alerts.filter((a) => !a.isResolved);
+  const resolvedAlerts = alerts.filter((a) => a.isResolved);
   const criticalAlarmCount = rooms.filter((r) => r.hasFireAlarm || r.smokeLevel > 300).length;
 
-  // Approximate energy calculation (e.g., lights ~200W, AC ~1500W, projector ~300W per active room)
+  const displayedAlerts = alertViewMode === 'unresolved' ? unresolvedAlerts : resolvedAlerts;
+
+  // Approximate energy calculation (lights ~240W, AC ~1600W, projector ~320W, fan ~120W)
   const currentTotalPowerKW = rooms.reduce((acc, r) => {
     if (!r.isPowerOn || r.emergencyPowerCut) return acc;
     let powerW = 0;
@@ -180,20 +195,33 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <Power className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="font-bold text-white text-sm">Hành động nhanh giám thị</h4>
+            <h4 className="font-bold text-white text-sm">Hành động nhanh & Đồng bộ</h4>
             <p className="text-xs text-slate-400">
-              Kiểm soát năng lượng và an toàn trên quy mô toàn trường
+              Kiểm soát năng lượng và đẩy dữ liệu trực tiếp vào Supabase Database
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Button Đẩy dữ liệu vào Supabase */}
+          {onPushToDatabase && (
+            <button
+              onClick={() => onPushToDatabase()}
+              disabled={isPushingDb}
+              title="Đẩy dữ liệu toàn bộ phòng học, cảnh báo và lịch trình hiện tại vào Supabase"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 disabled:opacity-50"
+            >
+              <Database className={`w-3.5 h-3.5 ${isPushingDb ? 'animate-spin' : ''}`} />
+              <span>{isPushingDb ? 'Đang đẩy dữ liệu...' : 'Đẩy dữ liệu vào Database'}</span>
+            </button>
+          )}
+
           {emptyPoweredOnRooms > 0 && (
             <button
               onClick={onTurnOffEmptyRooms}
               className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-bold transition-all active:scale-95"
             >
-              Tắt điện {emptyPoweredOnRooms} phòng trống ngay
+              Tắt điện {emptyPoweredOnRooms} phòng trống
             </button>
           )}
 
@@ -208,8 +236,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* ================= 2. CANH BAO MOI NHAT (ALERT LOGS) ================= */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+        {/* Header with Title and Filter Tabs */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
@@ -217,22 +246,57 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div>
               <h3 className="font-bold text-white text-base">Cảnh báo mới nhất (Realtime Log)</h3>
               <p className="text-xs text-slate-400">
-                Nhật ký sự cố cảm biến, nồng độ khói, nhiệt độ cao và thiết bị quên tắt
+                Chỉ hiển thị các sự cố đang phát sinh cần xử lý (cảnh báo đã giải quyết tự động ẩn)
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onTriggerRandomSmokeAlarm}
-            className="text-xs px-2.5 py-1 rounded-lg bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/30 font-medium transition-colors"
-          >
-            + Giả lập cảnh báo mới
-          </button>
+          <div className="flex items-center gap-2">
+            {/* View Mode Switcher */}
+            <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center">
+              <button
+                onClick={() => setAlertViewMode('unresolved')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  alertViewMode === 'unresolved'
+                    ? 'bg-red-500 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>Cảnh báo mới</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  alertViewMode === 'unresolved' ? 'bg-red-700 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {unresolvedAlerts.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setAlertViewMode('resolved')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  alertViewMode === 'resolved'
+                    ? 'bg-slate-800 text-emerald-400 font-bold border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>Đã giải quyết</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-400">
+                  {resolvedAlerts.length}
+                </span>
+              </button>
+            </div>
+
+            <button
+              onClick={onTriggerRandomSmokeAlarm}
+              className="text-xs px-2.5 py-1.5 rounded-xl bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/30 font-medium transition-colors whitespace-nowrap"
+            >
+              + Test cảnh báo
+            </button>
+          </div>
         </div>
 
+        {/* Alerts List */}
         <div className="space-y-3">
-          {alerts.map((alert) => {
-            // Severity styling
+          {displayedAlerts.map((alert) => {
             let severityBadge = 'bg-slate-800 text-slate-300 border-slate-700';
             let cardBg = 'bg-slate-950/70 border-slate-800/80';
 
@@ -242,8 +306,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             } else if (alert.severity === 'warning') {
               severityBadge = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
               cardBg = 'bg-amber-950/20 border-amber-500/30';
-            } else if (alert.severity === 'resolved') {
+            } else if (alert.severity === 'resolved' || alert.isResolved) {
               severityBadge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+              cardBg = 'bg-emerald-950/10 border-emerald-500/20';
             } else if (alert.severity === 'info') {
               severityBadge = 'bg-blue-500/20 text-blue-300 border-blue-500/40';
             }
@@ -258,16 +323,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div className="flex items-start gap-3">
                   <div
                     className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                      alert.severity === 'critical'
-                        ? 'bg-red-500 text-white'
+                      alert.isResolved
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : alert.severity === 'critical'
+                        ? 'bg-red-500 text-white animate-bounce'
                         : alert.severity === 'warning'
                         ? 'bg-amber-500 text-slate-950'
-                        : alert.severity === 'resolved'
-                        ? 'bg-emerald-500/20 text-emerald-400'
                         : 'bg-blue-500/20 text-blue-400'
                     }`}
                   >
-                    {alert.type === 'smoke' || alert.type === 'fire' ? (
+                    {alert.isResolved ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : alert.type === 'smoke' || alert.type === 'fire' ? (
                       <Flame className="w-4 h-4" />
                     ) : alert.type === 'temp_high' ? (
                       <TrendingUp className="w-4 h-4" />
@@ -285,12 +352,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${severityBadge}`}
                       >
-                        {alert.severity === 'critical'
+                        {alert.isResolved
+                          ? 'Đã xử lý an toàn'
+                          : alert.severity === 'critical'
                           ? 'Nguy hiểm'
                           : alert.severity === 'warning'
                           ? 'Cảnh báo'
-                          : alert.severity === 'resolved'
-                          ? 'Đã xử lý'
                           : 'Chú ý'}
                       </span>
                     </div>
@@ -300,11 +367,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3 text-slate-400" />
-                        {alert.timestamp}
+                        Ghi nhận: {alert.timestamp}
                       </span>
                       {alert.resolvedAt && (
-                        <span className="text-emerald-400">
-                          Xử lý lúc: {alert.resolvedAt}
+                        <span className="text-emerald-400 font-medium">
+                          ✓ Xử lý lúc: {alert.resolvedAt}
                         </span>
                       )}
                     </div>
@@ -325,9 +392,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   {!alert.isResolved ? (
                     <button
                       onClick={() => onResolveAlert(alert.id)}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-transform active:scale-95 shadow-md"
+                      title="Xác nhận sự cố đã được kiểm tra an toàn và ẩn khỏi danh sách cảnh báo mới"
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-transform active:scale-95 shadow-md flex items-center gap-1.5"
                     >
-                      Xác nhận an toàn
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Xác nhận an toàn</span>
                     </button>
                   ) : (
                     <span className="text-xs text-emerald-400 flex items-center gap-1 font-medium px-2 py-1">
@@ -339,6 +408,34 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             );
           })}
+
+          {/* Empty state when NO unresolved alerts */}
+          {alertViewMode === 'unresolved' && unresolvedAlerts.length === 0 && (
+            <div className="p-8 text-center rounded-2xl bg-slate-950/60 border border-slate-800 text-slate-400 space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <p className="font-bold text-white text-sm">Không có cảnh báo mới nào!</p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Tất cả phòng học an toàn. Các cảnh báo đã giải quyết được tự động ẩn khỏi danh sách này.
+              </p>
+              {resolvedAlerts.length > 0 && (
+                <button
+                  onClick={() => setAlertViewMode('resolved')}
+                  className="mt-3 text-xs text-orange-400 hover:text-orange-300 font-semibold underline inline-block"
+                >
+                  Xem lịch sử {resolvedAlerts.length} cảnh báo đã xử lý →
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Empty state when NO resolved alerts */}
+          {alertViewMode === 'resolved' && resolvedAlerts.length === 0 && (
+            <div className="p-8 text-center rounded-2xl bg-slate-950/60 border border-slate-800 text-slate-400 space-y-2">
+              <p className="font-bold text-white text-sm">Chưa có lịch sử cảnh báo đã giải quyết</p>
+            </div>
+          )}
         </div>
       </div>
 

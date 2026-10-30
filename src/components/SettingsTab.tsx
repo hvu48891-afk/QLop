@@ -47,6 +47,8 @@ interface SettingsTabProps {
     projectId: string;
     lastSync?: string;
   };
+  onPushToDatabase?: () => Promise<void> | void;
+  isPushingDb?: boolean;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -59,6 +61,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onDeleteUser,
   mqttInfo,
   supabaseInfo,
+  onPushToDatabase,
+  isPushingDb,
 }) => {
   // Local state for sliders before saving
   const [tempThreshold, setTempThreshold] = useState(settings.highTempThreshold);
@@ -483,6 +487,27 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               Tự động lưu phòng & nhật ký
             </p>
           </div>
+        </div>
+
+        {/* Nút bấm Đẩy dữ liệu vào Supabase */}
+        <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-white">Đẩy toàn bộ dữ liệu hiện tại vào Database</p>
+            <p className="text-[11px] text-slate-400">
+              Đồng bộ ngay 9 phòng học, các cảnh báo, lịch trình tự động và người dùng lên Supabase ({supabaseInfo?.projectId}).
+            </p>
+          </div>
+
+          {onPushToDatabase && (
+            <button
+              onClick={() => onPushToDatabase()}
+              disabled={isPushingDb}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
+            >
+              <Database className={`w-4 h-4 ${isPushingDb ? 'animate-spin' : ''}`} />
+              <span>{isPushingDb ? 'Đang đẩy dữ liệu...' : 'ĐẨY DỮ LIỆU LÊN SUPABASE NGAY'}</span>
+            </button>
+          )}
         </div>
       </div>
 
