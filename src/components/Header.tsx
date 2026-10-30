@@ -13,7 +13,10 @@ import {
   ChevronDown, 
   Radio, 
   Sparkles,
-  Zap
+  Zap,
+  ZapOff,
+  Clock,
+  FastForward
 } from 'lucide-react';
 import { User, TabType } from '../types';
 
@@ -28,6 +31,10 @@ interface HeaderProps {
   activeAlarmCount: number;
   mqttStatus: { status: string; latency: number };
   supabaseStatus?: { isConnected: boolean; projectId: string };
+  timeInfo?: import('../services/timeSyncService').TimeSyncInfo;
+  onOpenTimeSyncModal?: () => void;
+  onOpenSchoolPowerModal?: () => void;
+  poweredOnCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,6 +48,10 @@ export const Header: React.FC<HeaderProps> = ({
   activeAlarmCount,
   mqttStatus,
   supabaseStatus,
+  timeInfo,
+  onOpenTimeSyncModal,
+  onOpenSchoolPowerModal,
+  poweredOnCount = 0,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -108,11 +119,29 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Simulator Bar + Time + User dropdown */}
       <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-        {/* Realtime Clock Badge */}
-        <div className="hidden xl:flex flex-col items-end px-3 py-1 bg-slate-900/80 border border-slate-800 rounded-xl text-right">
-          <span className="text-xs font-mono font-bold text-orange-400">{currentTime}</span>
-          <span className="text-[10px] text-slate-400 capitalize">{currentDate}</span>
-        </div>
+        {/* Realtime Clock & Sync Button */}
+        <button
+          onClick={onOpenTimeSyncModal}
+          title="Nhấn để đồng bộ giờ chuẩn NTP hoặc mô phỏng tua thời gian kiểm tra quy tắc"
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 rounded-xl text-right transition-all group active:scale-95"
+        >
+          <Clock className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-mono font-bold text-orange-400">
+                {timeInfo ? timeInfo.currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : currentTime}
+              </span>
+              {timeInfo?.isSimulated && (
+                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/40">
+                  {timeInfo.speedMultiplier}x
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] text-slate-400 leading-none group-hover:text-orange-300 transition-colors">
+              {timeInfo?.isSimulated ? 'Đang mô phỏng' : 'Đồng bộ giờ NTP'}
+            </span>
+          </div>
+        </button>
 
         {/* Quick Simulation Trigger Buttons */}
         <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
@@ -136,6 +165,28 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
         </div>
+
+        {/* Master School-wide Power Cut Button */}
+        {onOpenSchoolPowerModal && (
+          <button
+            onClick={onOpenSchoolPowerModal}
+            title="Mở bảng điều khiển cắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all active:scale-95 shadow-md ${
+              poweredOnCount > 0
+                ? 'bg-red-950/80 hover:bg-red-900 border-red-500/60 text-red-200 hover:text-white shadow-red-950/40 ring-1 ring-red-500/40'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400'
+            }`}
+          >
+            <ZapOff className={`w-3.5 h-3.5 ${poweredOnCount > 0 ? 'text-red-400 animate-pulse' : 'text-slate-500'}`} />
+            <span className="hidden sm:inline">Tắt điện toàn trường</span>
+            <span className="sm:hidden">Cắt điện</span>
+            {poweredOnCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-[10px] font-black text-white ml-0.5">
+                {poweredOnCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* User Profile / Switcher Dropdown */}
         {currentUser && (

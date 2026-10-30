@@ -30,6 +30,8 @@ interface SchedulesTabProps {
   onSaveRule: (rule: ScheduleRule) => void;
   onDeleteRule: (ruleId: string) => void;
   onTriggerRuleNow: (rule: ScheduleRule) => void;
+  timeInfo?: import('../services/timeSyncService').TimeSyncInfo;
+  onOpenTimeSyncModal?: () => void;
 }
 
 export const SchedulesTab: React.FC<SchedulesTabProps> = ({
@@ -39,6 +41,8 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
   onSaveRule,
   onDeleteRule,
   onTriggerRuleNow,
+  timeInfo,
+  onOpenTimeSyncModal,
 }) => {
   const [viewMode, setViewMode] = useState<'rules' | 'calendar'>('rules');
   const [calendarView, setCalendarView] = useState<'week' | 'month'>('week');
@@ -187,6 +191,44 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
             <span>Tạo Rule Mới</span>
           </button>
         </div>
+      </div>
+
+      {/* Realtime Engine Status & Time Sync Banner */}
+      <div className="p-4 rounded-3xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white text-sm">Hệ thống Lập lịch Chạy theo Thời gian thực</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Live Engine Active
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Đồng hồ hiện tại: <strong className="text-orange-400 font-mono">
+                {timeInfo ? timeInfo.currentTime.toLocaleTimeString('vi-VN') : 'Đang đồng bộ...'}
+              </strong>
+              {timeInfo?.isSimulated && (
+                <span className="text-amber-400 ml-1.5 font-semibold">
+                  (Mô phỏng tốc độ {timeInfo.speedMultiplier}x)
+                </span>
+              )}
+              {' '}• Tự động kích hoạt khi đúng giờ hẹn
+            </p>
+          </div>
+        </div>
+
+        {onOpenTimeSyncModal && (
+          <button
+            onClick={onOpenTimeSyncModal}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors active:scale-95 whitespace-nowrap self-stretch sm:self-auto justify-center"
+          >
+            <Repeat className="w-3.5 h-3.5 text-orange-400" />
+            <span>Đồng bộ giờ & Thử nghiệm tự động</span>
+          </button>
+        )}
       </div>
 
       {/* ================= VIEW 1: RULES LIST ================= */}

@@ -21,7 +21,8 @@ import {
   Sparkles,
   Database,
   UploadCloud,
-  Check
+  Check,
+  ZapOff
 } from 'lucide-react';
 import { Room, AlertLog, ActivityLog } from '../types';
 
@@ -36,6 +37,7 @@ interface DashboardTabProps {
   onTriggerRandomSmokeAlarm: () => void;
   onPushToDatabase?: () => Promise<void> | void;
   isPushingDb?: boolean;
+  onOpenSchoolPowerModal?: () => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -49,6 +51,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onTriggerRandomSmokeAlarm,
   onPushToDatabase,
   isPushingDb,
+  onOpenSchoolPowerModal,
 }) => {
   // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
   const [alertViewMode, setAlertViewMode] = useState<'unresolved' | 'resolved'>('unresolved');
@@ -213,6 +216,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             >
               <Database className={`w-3.5 h-3.5 ${isPushingDb ? 'animate-spin' : ''}`} />
               <span>{isPushingDb ? 'Đang đẩy dữ liệu...' : 'Đẩy dữ liệu vào Database'}</span>
+            </button>
+          )}
+
+          {/* Button Tắt điện toàn trường */}
+          {onOpenSchoolPowerModal && (
+            <button
+              onClick={onOpenSchoolPowerModal}
+              title="Mở bảng điều khiển cắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
+              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-red-600/30"
+            >
+              <ZapOff className="w-3.5 h-3.5" />
+              <span>Tắt điện toàn trường ({poweredOnRooms})</span>
             </button>
           )}
 

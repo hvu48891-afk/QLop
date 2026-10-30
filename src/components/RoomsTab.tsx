@@ -18,7 +18,8 @@ import {
   Check, 
   AlertOctagon,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  ZapOff
 } from 'lucide-react';
 import { Room } from '../types';
 
@@ -27,6 +28,7 @@ interface RoomsTabProps {
   onSelectRoom: (room: Room) => void;
   onToggleRoomPower: (roomId: string, e: React.MouseEvent) => void;
   onTriggerSmoke: (roomId: string, e: React.MouseEvent) => void;
+  onOpenSchoolPowerModal?: () => void;
 }
 
 export const RoomsTab: React.FC<RoomsTabProps> = ({
@@ -34,6 +36,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   onSelectRoom,
   onToggleRoomPower,
   onTriggerSmoke,
+  onOpenSchoolPowerModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBuilding, setSelectedBuilding] = useState<string>('all');
@@ -115,6 +118,18 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Master School Power Cut Trigger */}
+        {onOpenSchoolPowerModal && (
+          <button
+            onClick={onOpenSchoolPowerModal}
+            title="Mở bảng điều khiển cắt điện toàn trường"
+            className="px-3.5 py-2 rounded-xl bg-red-600/90 hover:bg-red-600 active:scale-95 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-red-600/20 whitespace-nowrap"
+          >
+            <ZapOff className="w-3.5 h-3.5" />
+            <span>Tắt điện toàn trường</span>
+          </button>
+        )}
       </div>
 
       {/* Grid of Classrooms */}

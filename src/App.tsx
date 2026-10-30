@@ -23,6 +23,7 @@ import {
 } from './data/mockData';
 import { mqttService } from './services/mqttService';
 import { supabaseService, SupabaseStatus } from './services/supabaseService';
+import { timeSyncService, TimeSyncInfo } from './services/timeSyncService';
 import { soundManager } from './utils/soundEffects';
 
 import { Navbar } from './components/Navbar';
@@ -33,7 +34,9 @@ import { RoomDetailView } from './components/RoomDetailView';
 import { SchedulesTab } from './components/SchedulesTab';
 import { SettingsTab } from './components/SettingsTab';
 import { LoginModal } from './components/LoginModal';
-import { Flame, Bell, X, ShieldAlert } from 'lucide-react';
+import { TimeSyncModal } from './components/TimeSyncModal';
+import { SchoolPowerModal } from './components/SchoolPowerModal';
+import { Flame, Bell, X, ShieldAlert, Clock, Zap } from 'lucide-react';
 
 export default function App() {
   // Navigation & Screen State
@@ -56,12 +59,36 @@ export default function App() {
   const [isPushingDb, setIsPushingDb] = useState(false);
   const [dbSyncToast, setDbSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
+  // Real-time Synchronized Time State
+  const [timeInfo, setTimeInfo] = useState<TimeSyncInfo>(timeSyncService.getTimeInfo());
+  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
+  const [isSchoolPowerModalOpen, setIsSchoolPowerModalOpen] = useState(false);
+  const [autoScheduleToast, setAutoScheduleToast] = useState<{ title: string; time: string; action: string } | null>(null);
+
+  // Keep refs for freshness
+  const rulesRef = useRef(rules);
+  useEffect(() => {
+    rulesRef.current = rules;
+  }, [rules]);
+
+  const roomsRef = useRef(rooms);
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
+
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  // Track executed rules by minute to prevent repeated triggers
+  const executedMinutesRef = useRef<Record<string, boolean>>({});
+
   // Connect to Supabase on mount and auto-push existing system data to database
   useEffect(() => {
     supabaseService.checkConnection().then(async (status) => {
       setSupabaseStatus(status);
       if (status.isConnected) {
-        // Auto push initial data into Supabase
         try {
           await supabaseService.pushAllDataToDatabase({
             rooms: INITIAL_ROOMS,
@@ -90,6 +117,43 @@ export default function App() {
     };
   }, []);
 
+  // REAL-TIME CLOCK SYNC & AUTOMATED SCHEDULE ENGINE
+  useEffect(() => {
+    const unsubscribeTime = timeSyncService.subscribe((currentTime, info) => {
+      setTimeInfo(info);
+
+      // Evaluate scheduled automation rules against the synchronized clock
+      const hours = currentTime.getHours().toString().padStart(2, '0');
+      const minutes = currentTime.getMinutes().toString().padStart(2, '0');
+      const currentHHmm = `${hours}:${minutes}`;
+      const currentDayOfWeek = currentTime.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+
+      const activeRules = rulesRef.current;
+      activeRules.forEach((rule) => {
+        if (!rule.isEnabled) return;
+        if (!rule.daysOfWeek.includes(currentDayOfWeek)) return;
+        if (rule.time !== currentHHmm) return;
+
+        const triggerKey = `${rule.id}-${currentHHmm}-${currentTime.getDate()}`;
+        if (executedMinutesRef.current[triggerKey]) return; // Already triggered this minute
+
+        executedMinutesRef.current[triggerKey] = true;
+        // Trigger automated action!
+        handleTriggerRuleNow(rule, true);
+        setAutoScheduleToast({
+          title: rule.title,
+          time: rule.time,
+          action: rule.description,
+        });
+        setTimeout(() => setAutoScheduleToast(null), 7000);
+      });
+    });
+
+    return () => {
+      unsubscribeTime();
+    };
+  }, []);
+
   // Active Toast Alert Banner
   const [toastAlert, setToastAlert] = useState<{
     id: string;
@@ -98,17 +162,6 @@ export default function App() {
     type: 'smoke' | 'temp';
   } | null>(null);
 
-  // Keep a ref for rooms to access fresh state in MQTT callbacks
-  const roomsRef = useRef(rooms);
-  useEffect(() => {
-    roomsRef.current = rooms;
-  }, [rooms]);
-
-  // Keep ref for settings
-  const settingsRef = useRef(settings);
-  useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
 
   // 1. MQTT SUBSCRIPTION & TELEMETRY LISTENER
   useEffect(() => {
@@ -462,6 +515,109 @@ export default function App() {
     }
   };
 
+  // MASTER ACTION: TẮT ĐIỆN TOÀN TRƯỜNG (CẦU DAO TỔNG HOẶC TẮT TOÀN BỘ THIẾT BỊ)
+  const handleSchoolWidePowerCut = (mode: 'emergency' | 'soft') => {
+    const updatedRooms = rooms.map((r) => ({
+      ...r,
+      isPowerOn: false,
+      emergencyPowerCut: mode === 'emergency',
+      devices: {
+        ...r.devices,
+        light: { ...r.devices.light, isOn: false },
+        ac: { ...r.devices.ac, isOn: false },
+        projector: { ...r.devices.projector, isOn: false },
+        fan: { ...r.devices.fan, isOn: false },
+      },
+      lastUpdated: 'Vừa xong',
+    }));
+
+    setRooms(updatedRooms);
+
+    // Audio feedback
+    if (settings.soundEnabled) {
+      if (mode === 'emergency') {
+        soundManager.playEmergencyCut();
+      } else {
+        soundManager.playSwitch(false);
+      }
+    }
+
+    // MQTT Broadcast
+    mqttService.publish('school/master_power', {
+      action: mode === 'emergency' ? 'EMERGENCY_CUTOFF_ALL' : 'TURN_OFF_ALL',
+      mode,
+      roomsCount: rooms.length,
+      authorizedBy: currentUser?.name || 'Quản trị viên',
+      timestamp: new Date().toISOString(),
+    });
+
+    // Alert Log
+    const alertMsg = mode === 'emergency'
+      ? `🚨 CẦU DAO TỔNG: ĐÃ NGẮT ĐIỆN KHẨN CẤP TOÀN TRƯỜNG (${rooms.length} phòng học) bởi ${currentUser?.name || 'Giám thị'}!`
+      : `⚠️ ĐÃ TẮT TOÀN BỘ THIẾT BỊ ĐIỆN TOÀN TRƯỜNG (${rooms.length} phòng học) bởi ${currentUser?.name || 'Giám thị'}`;
+
+    const newAlert: AlertLog = {
+      id: `alt-school-${Date.now()}`,
+      roomId: 'ALL_ROOMS',
+      roomName: 'Toàn trường (Tất cả tòa)',
+      building: 'Toàn bộ',
+      type: 'power_leak',
+      message: alertMsg,
+      severity: mode === 'emergency' ? 'critical' : 'warning',
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      isResolved: false,
+    };
+
+    setAlerts((prev) => [newAlert, ...prev]);
+    supabaseService.logAlertToSupabase(newAlert);
+
+    // Activity Log
+    logActivity(
+      mode === 'emergency'
+        ? `🚨 CẮT ĐIỆN TOÀN TRƯỜNG KHẨN CẤP: Ngắt nguồn toàn bộ ${rooms.length} phòng học`
+        : `Tắt toàn bộ thiết bị điện toàn trường (${rooms.length} phòng học)`,
+      'school',
+      'Toàn trường'
+    );
+
+    // Toast Notification
+    setDbSyncToast({
+      message: mode === 'emergency'
+        ? `ĐÃ CẮT ĐIỆN KHẨN CẤP TOÀN TRƯỜNG: Tất cả ${rooms.length} phòng học đã ngắt nguồn!`
+        : `Đã tắt toàn bộ thiết bị điện ở cả ${rooms.length} phòng học!`,
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 5000);
+  };
+
+  // RESTORE POWER SCHOOL-WIDE
+  const handleSchoolWidePowerRestore = () => {
+    const updatedRooms = rooms.map((r) => ({
+      ...r,
+      isPowerOn: true,
+      emergencyPowerCut: false,
+      lastUpdated: 'Vừa xong',
+    }));
+
+    setRooms(updatedRooms);
+
+    if (settings.soundEnabled) soundManager.playSwitch(true);
+
+    mqttService.publish('school/master_power', {
+      action: 'RESTORE_ALL',
+      authorizedBy: currentUser?.name || 'Quản trị viên',
+      timestamp: new Date().toISOString(),
+    });
+
+    logActivity(`⚡ Khôi phục nguồn điện an toàn cho toàn bộ ${rooms.length} phòng học`, 'school', 'Toàn trường');
+
+    setDbSyncToast({
+      message: `ĐÃ KHÔI PHỤC NGUỒN ĐIỆN TOÀN TRƯỜNG: Toàn bộ ${rooms.length} phòng học đã được cấp điện an toàn!`,
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 4000);
+  };
+
   // QUICK ACTION: TURN OFF EMPTY ROOMS
   const handleTurnOffEmptyRooms = () => {
     const emptyPoweredRooms = rooms.filter((r) => !r.isOccupied && r.isPowerOn);
@@ -590,9 +746,12 @@ export default function App() {
     }
   };
 
-  // TRIGGER RULE IMMEDIATELY (TEST BUTTON)
-  const handleTriggerRuleNow = (rule: ScheduleRule) => {
-    if (settings.soundEnabled) soundManager.playClick();
+  // TRIGGER RULE (MANUALLY OR AUTOMATICALLY IN REAL TIME)
+  const handleTriggerRuleNow = (rule: ScheduleRule, isAuto: boolean = false) => {
+    if (settings.soundEnabled) {
+      if (isAuto) soundManager.playSwitch(true);
+      else soundManager.playClick();
+    }
 
     // Determine target rooms
     let targetRooms = rooms;
@@ -651,7 +810,13 @@ export default function App() {
       })
     );
 
-    logActivity(`Thực thi thủ công quy tắc "${rule.title}"`, 'automation', rule.targetName);
+    logActivity(
+      isAuto
+        ? `⚡ [Tự động thời gian thực ${rule.time}] Thực thi quy tắc "${rule.title}"`
+        : `Thực thi thủ công quy tắc "${rule.title}"`,
+      'automation',
+      rule.targetName
+    );
   };
 
   // USER MANAGEMENT
@@ -731,6 +896,34 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* Toast Notification when auto schedule rule executes */}
+      {autoScheduleToast && (
+        <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-gradient-to-r from-orange-600 to-amber-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 border-2 border-orange-400">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-white/20 animate-pulse">
+              <Zap className="w-5 h-5 text-amber-200 fill-amber-200" />
+            </div>
+            <div>
+              <p className="font-black text-sm uppercase tracking-wide flex items-center gap-1.5">
+                <span>⚡ TỰ ĐỘNG THỰC THI THEO LỊCH</span>
+                <span className="text-[11px] font-mono px-1.5 py-0.2 bg-black/30 rounded font-normal">
+                  {autoScheduleToast.time}
+                </span>
+              </p>
+              <p className="text-xs text-white/95 font-medium">{autoScheduleToast.title}</p>
+              <p className="text-[11px] text-orange-100">{autoScheduleToast.action}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAutoScheduleToast(null)}
+            className="p-1 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-screen">
         {/* Desktop Sidebar + Mobile Bottom Nav */}
         <Navbar
@@ -758,6 +951,10 @@ export default function App() {
             activeAlarmCount={activeAlarmCount}
             mqttStatus={mqttStatus}
             supabaseStatus={supabaseStatus}
+            timeInfo={timeInfo}
+            onOpenTimeSyncModal={() => setIsTimeModalOpen(true)}
+            onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+            poweredOnCount={rooms.filter((r) => r.isPowerOn && !r.emergencyPowerCut).length}
           />
 
           {/* Main Body View */}
@@ -788,6 +985,7 @@ export default function App() {
                     onTriggerRandomSmokeAlarm={triggerRandomSmokeAlarm}
                     onPushToDatabase={handlePushToDatabase}
                     isPushingDb={isPushingDb}
+                    onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
                   />
                 )}
 
@@ -801,6 +999,7 @@ export default function App() {
                       e.stopPropagation();
                       triggerSmokeForRoom(roomId);
                     }}
+                    onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
                   />
                 )}
 
@@ -813,6 +1012,8 @@ export default function App() {
                     onSaveRule={handleSaveRule}
                     onDeleteRule={handleDeleteRule}
                     onTriggerRuleNow={handleTriggerRuleNow}
+                    timeInfo={timeInfo}
+                    onOpenTimeSyncModal={() => setIsTimeModalOpen(true)}
                   />
                 )}
 
@@ -837,6 +1038,24 @@ export default function App() {
           </main>
         </div>
       </div>
+
+      {/* Real-time Time Synchronization & Simulation Modal */}
+      <TimeSyncModal
+        isOpen={isTimeModalOpen}
+        onClose={() => setIsTimeModalOpen(false)}
+        timeInfo={timeInfo}
+        soundEnabled={settings.soundEnabled}
+      />
+
+      {/* Master School Power Cut & Restore Modal */}
+      <SchoolPowerModal
+        isOpen={isSchoolPowerModalOpen}
+        onClose={() => setIsSchoolPowerModalOpen(false)}
+        rooms={rooms}
+        currentUser={currentUser}
+        onSchoolWideCut={handleSchoolWidePowerCut}
+        onSchoolWideRestore={handleSchoolWidePowerRestore}
+      />
 
       {/* Mock Login Screen if logged out */}
       {!currentUser && (
