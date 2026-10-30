@@ -30,7 +30,7 @@ interface HeaderProps {
   onClearAllAlarms: () => void;
   activeAlarmCount: number;
   mqttStatus: { status: string; latency: number };
-  supabaseStatus?: { isConnected: boolean; projectId: string };
+  supabaseStatus?: { isConnected: boolean; projectId: string; dbRoomCount?: number };
   timeInfo?: import('../services/timeSyncService').TimeSyncInfo;
   onOpenTimeSyncModal?: () => void;
   onOpenSchoolPowerModal?: () => void;
@@ -106,10 +106,14 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
           <span 
             title={`Supabase URL: https://${supabaseStatus?.projectId || 'cuygczfkktprkyosabtu'}.supabase.co`}
-            className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 border border-emerald-500/40 text-emerald-300"
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 border border-emerald-500/40 text-emerald-300"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
-            Supabase DB Kết Nối
+            <span>
+              {supabaseStatus?.dbRoomCount !== undefined
+                ? `DB: ${supabaseStatus.dbRoomCount} phòng`
+                : 'Supabase Kết Nối'}
+            </span>
           </span>
         </div>
         <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">

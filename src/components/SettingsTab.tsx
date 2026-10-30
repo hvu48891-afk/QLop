@@ -46,8 +46,14 @@ interface SettingsTabProps {
     url: string;
     projectId: string;
     lastSync?: string;
+    dbRoomCount?: number;
+    rlsRestricted?: boolean;
   };
+  roomsCount?: number;
+  dbRoomCount?: number;
   onPushToDatabase?: () => Promise<void> | void;
+  onFetchFromDatabase?: () => Promise<void> | void;
+  onOpenSqlHelper?: () => void;
   isPushingDb?: boolean;
 }
 
@@ -61,7 +67,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onDeleteUser,
   mqttInfo,
   supabaseInfo,
+  roomsCount = 12,
+  dbRoomCount,
   onPushToDatabase,
+  onFetchFromDatabase,
+  onOpenSqlHelper,
   isPushingDb,
 }) => {
   // Local state for sliders before saving
@@ -470,44 +480,92 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-1">
           <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
-            <p className="text-slate-400 text-[10px]">Supabase Project URL</p>
-            <p className="font-mono font-semibold text-white mt-0.5 truncate" title={supabaseInfo?.url}>
-              {supabaseInfo?.url || 'https://cuygczfkktprkyosabtu.supabase.co'}
+            <p className="text-slate-400 text-[10px]">Phòng học trong App</p>
+            <p className="font-mono font-bold text-amber-400 text-sm mt-0.5">
+              {roomsCount} phòng học
             </p>
           </div>
           <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
-            <p className="text-slate-400 text-[10px]">Publishable Key</p>
-            <p className="font-mono font-semibold text-slate-300 mt-0.5">sb_publishable_VHbv5N...whVK51L0</p>
+            <p className="text-slate-400 text-[10px]">Phòng trong Database</p>
+            <p className="font-mono font-bold text-emerald-400 text-sm mt-0.5">
+              {dbRoomCount !== undefined ? `${dbRoomCount} phòng học` : 'Đang kiểm tra...'}
+            </p>
           </div>
           <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
-            <p className="text-slate-400 text-[10px]">Đồng bộ dữ liệu Realtime</p>
-            <p className="font-semibold text-emerald-400 mt-0.5">
-              Tự động lưu phòng & nhật ký
+            <p className="text-slate-400 text-[10px]">Supabase Project ID</p>
+            <p className="font-mono font-semibold text-white mt-0.5 truncate" title={supabaseInfo?.url}>
+              {supabaseInfo?.projectId || 'cuygczfkktprkyosabtu'}
+            </p>
+          </div>
+          <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <p className="text-slate-400 text-[10px]">Trạng thái đồng bộ</p>
+            <p className="font-semibold text-cyan-400 mt-0.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+              {dbRoomCount === roomsCount ? 'Khớp 100%' : 'Cần đồng bộ'}
             </p>
           </div>
         </div>
 
-        {/* Nút bấm Đẩy dữ liệu vào Supabase */}
-        <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Cảnh báo số lượng phòng nếu chưa khớp */}
+        {dbRoomCount !== undefined && dbRoomCount !== roomsCount && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 text-base">⚠️</span>
+              <div>
+                <p className="font-bold text-amber-300">
+                  Số lượng phòng học đang lệch: App có {roomsCount} phòng, Database có {dbRoomCount} phòng.
+                </p>
+                <p className="text-slate-300 text-[11px] mt-0.5">
+                  Bạn có thể chọn nạp phòng từ Database về App, hoặc đẩy danh sách phòng chuẩn từ App lên Database.
+                </p>
+              </div>
+            </div>
+            {onOpenSqlHelper && (
+              <button
+                type="button"
+                onClick={onOpenSqlHelper}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-semibold text-[11px] whitespace-nowrap transition-colors"
+              >
+                Mở lệnh SQL RLS
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Nút bấm Đồng bộ dữ liệu phòng học vào Supabase */}
+        <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold text-white">Đẩy toàn bộ dữ liệu hiện tại vào Database</p>
+            <p className="text-xs font-bold text-white">Đồng bộ số liệu phòng học với Database</p>
             <p className="text-[11px] text-slate-400">
-              Đồng bộ ngay 9 phòng học, các cảnh báo, lịch trình tự động và người dùng lên Supabase ({supabaseInfo?.projectId}).
+              Cập nhật {roomsCount} phòng học, trạng thái cảm biến, lịch trình tự động vào Supabase.
             </p>
           </div>
 
-          {onPushToDatabase && (
-            <button
-              onClick={() => onPushToDatabase()}
-              disabled={isPushingDb}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
-            >
-              <Database className={`w-4 h-4 ${isPushingDb ? 'animate-spin' : ''}`} />
-              <span>{isPushingDb ? 'Đang đẩy dữ liệu...' : 'ĐẨY DỮ LIỆU LÊN SUPABASE NGAY'}</span>
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {onFetchFromDatabase && (
+              <button
+                onClick={() => onFetchFromDatabase()}
+                disabled={isPushingDb}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                <Database className="w-4 h-4 text-cyan-400" />
+                <span>NẠP TỪ DATABASE</span>
+              </button>
+            )}
+
+            {onPushToDatabase && (
+              <button
+                onClick={() => onPushToDatabase()}
+                disabled={isPushingDb}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 transition-all disabled:opacity-50"
+              >
+                <Database className={`w-4 h-4 ${isPushingDb ? 'animate-spin' : ''}`} />
+                <span>{isPushingDb ? 'Đang đồng bộ...' : 'ĐẨY LÊN DATABASE NGAY'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

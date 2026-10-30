@@ -187,7 +187,7 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
                   <span className="font-bold text-sm text-red-200">Ngắt Khẩn Cấp (Aptomat)</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Cắt cầu dao khẩn cấp lập tức toàn bộ 9 phòng học. Khóa an toàn, phát chuông báo động và ghi log đỏ.
+                  Cắt cầu dao khẩn cấp lập tức toàn bộ {totalRooms} phòng học. Khóa an toàn, phát chuông báo động và ghi log đỏ.
                 </p>
               </button>
 

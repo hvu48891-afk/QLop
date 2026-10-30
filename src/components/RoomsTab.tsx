@@ -19,7 +19,10 @@ import {
   AlertOctagon,
   ChevronRight,
   ShieldAlert,
-  ZapOff
+  ZapOff,
+  Plus,
+  Database,
+  Building
 } from 'lucide-react';
 import { Room } from '../types';
 
@@ -29,6 +32,11 @@ interface RoomsTabProps {
   onToggleRoomPower: (roomId: string, e: React.MouseEvent) => void;
   onTriggerSmoke: (roomId: string, e: React.MouseEvent) => void;
   onOpenSchoolPowerModal?: () => void;
+  onOpenAddRoomModal?: () => void;
+  dbRoomCount?: number;
+  onPushToDatabase?: () => void;
+  onFetchFromDatabase?: () => void;
+  isSyncingDb?: boolean;
 }
 
 export const RoomsTab: React.FC<RoomsTabProps> = ({
@@ -37,6 +45,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   onToggleRoomPower,
   onTriggerSmoke,
   onOpenSchoolPowerModal,
+  onOpenAddRoomModal,
+  dbRoomCount,
+  onPushToDatabase,
+  onFetchFromDatabase,
+  isSyncingDb,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBuilding, setSelectedBuilding] = useState<string>('all');
@@ -64,8 +77,91 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
     return matchesSearch && matchesBuilding && matchesStatus;
   });
 
+  const countA = rooms.filter(r => r.building === 'Tòa A').length;
+  const countB = rooms.filter(r => r.building === 'Tòa B').length;
+  const countC = rooms.filter(r => r.building === 'Tòa C').length;
+
   return (
-    <div className="space-y-6 pb-24 lg:pb-12">
+    <div className="space-y-5 pb-24 lg:pb-12">
+      {/* Summary Header: Classroom Inventory & Database Status */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-4 sm:p-5 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+              <span>{rooms.length} Phòng học</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-bold border border-orange-500/30">
+                Toàn trường
+              </span>
+            </h3>
+
+            {/* DB Room Count Badge */}
+            <div
+              title={`Số phòng học lưu trong Supabase: ${dbRoomCount ?? 'Chưa rõ'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border ${
+                dbRoomCount === rooms.length
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                  : 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>DB: {dbRoomCount !== undefined ? `${dbRoomCount} phòng` : 'Đã kết nối'}</span>
+              {dbRoomCount === rooms.length && <Check className="w-3 h-3 text-emerald-400" />}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-slate-400">
+            <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300">
+              Tòa A: <strong className="text-white">{countA}</strong> phòng
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300">
+              Tòa B: <strong className="text-white">{countB}</strong> phòng
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300">
+              Tòa C: <strong className="text-white">{countC}</strong> phòng
+            </span>
+            <span className="text-slate-500">•</span>
+            <span>Hiển thị: <strong className="text-orange-400 font-mono">{filteredRooms.length}</strong> phòng</span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {onOpenAddRoomModal && (
+            <button
+              onClick={onOpenAddRoomModal}
+              title="Thêm phòng học mới vào hệ thống"
+              className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Thêm phòng học</span>
+            </button>
+          )}
+
+          {onPushToDatabase && (
+            <button
+              onClick={onPushToDatabase}
+              disabled={isSyncingDb}
+              title="Đồng bộ danh sách phòng học hiện tại vào Supabase Database"
+              className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+            >
+              <Database className={`w-3.5 h-3.5 ${isSyncingDb ? 'animate-spin' : ''}`} />
+              <span>{isSyncingDb ? 'Đang đồng bộ...' : 'Đẩy lên DB'}</span>
+            </button>
+          )}
+
+          {onFetchFromDatabase && dbRoomCount !== undefined && dbRoomCount > 0 && (
+            <button
+              onClick={onFetchFromDatabase}
+              title="Tải danh sách phòng học từ Supabase về hệ thống"
+              className="flex-1 md:flex-none px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+            >
+              <Database className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Nạp từ DB</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Search & Filter Toolbar */}
       <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Search Input */}

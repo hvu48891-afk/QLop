@@ -36,6 +36,8 @@ import { SettingsTab } from './components/SettingsTab';
 import { LoginModal } from './components/LoginModal';
 import { TimeSyncModal } from './components/TimeSyncModal';
 import { SchoolPowerModal } from './components/SchoolPowerModal';
+import { AddRoomModal } from './components/AddRoomModal';
+import { SqlHelperModal } from './components/SqlHelperModal';
 import { Flame, Bell, X, ShieldAlert, Clock, Zap } from 'lucide-react';
 
 export default function App() {
@@ -43,8 +45,17 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
-  // Core Data State
-  const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
+  // Core Data State - read from localStorage cache if available
+  const [rooms, setRooms] = useState<Room[]>(() => {
+    try {
+      const cached = localStorage.getItem('smart_classroom_rooms');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_ROOMS;
+  });
   const [alerts, setAlerts] = useState<AlertLog[]>(INITIAL_ALERTS);
   const [rules, setRules] = useState<ScheduleRule[]>(INITIAL_RULES);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
@@ -57,12 +68,14 @@ export default function App() {
   // Supabase Database Connection Info
   const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>(supabaseService.getStatus());
   const [isPushingDb, setIsPushingDb] = useState(false);
-  const [dbSyncToast, setDbSyncToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [dbSyncToast, setDbSyncToast] = useState<{ message: string; type: 'success' | 'info'; action?: { label: string; onClick: () => void } } | null>(null);
 
   // Real-time Synchronized Time State
   const [timeInfo, setTimeInfo] = useState<TimeSyncInfo>(timeSyncService.getTimeInfo());
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
   const [isSchoolPowerModalOpen, setIsSchoolPowerModalOpen] = useState(false);
+  const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
+  const [isSqlHelperModalOpen, setIsSqlHelperModalOpen] = useState(false);
   const [autoScheduleToast, setAutoScheduleToast] = useState<{ title: string; time: string; action: string } | null>(null);
 
   // Keep refs for freshness
@@ -84,21 +97,34 @@ export default function App() {
   // Track executed rules by minute to prevent repeated triggers
   const executedMinutesRef = useRef<Record<string, boolean>>({});
 
-  // Connect to Supabase on mount and auto-push existing system data to database
+  // Connect to Supabase on mount, query classrooms from database, and auto-sync
   useEffect(() => {
     supabaseService.checkConnection().then(async (status) => {
       setSupabaseStatus(status);
       if (status.isConnected) {
         try {
-          await supabaseService.pushAllDataToDatabase({
-            rooms: INITIAL_ROOMS,
-            alerts: INITIAL_ALERTS,
-            rules: INITIAL_RULES,
-            users: INITIAL_USERS,
-            activities: INITIAL_ACTIVITIES,
-            settings: INITIAL_SETTINGS,
-          });
-          setSupabaseStatus(supabaseService.getStatus());
+          // 1. Kiểm tra xem database Supabase đã có dữ liệu phòng học chưa
+          const dbRooms = await supabaseService.fetchRoomsFromSupabase();
+          if (dbRooms && dbRooms.length > 0) {
+            // Khớp số lượng và danh sách phòng học theo đúng Database!
+            setRooms(dbRooms);
+            setSupabaseStatus((prev) => ({
+              ...prev,
+              dbRoomCount: dbRooms.length,
+            }));
+          } else {
+            // Nếu Database chưa có phòng học, đẩy danh sách phòng hiện tại lên Database
+            await supabaseService.pushAllDataToDatabase({
+              rooms: roomsRef.current,
+              alerts: INITIAL_ALERTS,
+              rules: INITIAL_RULES,
+              users: INITIAL_USERS,
+              activities: INITIAL_ACTIVITIES,
+              settings: INITIAL_SETTINGS,
+            });
+            const updated = await supabaseService.checkConnection();
+            setSupabaseStatus(updated);
+          }
         } catch {}
       }
     });
@@ -681,6 +707,53 @@ export default function App() {
     }
   };
 
+  // ADD NEW CLASSROOM
+  const handleAddRoom = async (newRoom: Room) => {
+    setRooms((prev) => [...prev, newRoom]);
+    logActivity(`Thêm phòng học mới: ${newRoom.name} (${newRoom.building})`, newRoom.id, newRoom.name);
+    // Sync to Supabase
+    await supabaseService.syncRoomToSupabase(newRoom);
+    const updatedStatus = await supabaseService.checkConnection();
+    setSupabaseStatus(updatedStatus);
+    setDbSyncToast({
+      message: `Đã thêm phòng ${newRoom.name} thành công (${rooms.length + 1} phòng trong trường)!`,
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 4000);
+  };
+
+  // EXPLICIT FETCH ROOMS FROM SUPABASE DATABASE
+  const handleFetchFromDatabase = async () => {
+    setIsPushingDb(true);
+    try {
+      const dbRooms = await supabaseService.fetchRoomsFromSupabase();
+      if (dbRooms && dbRooms.length > 0) {
+        setRooms(dbRooms);
+        setSupabaseStatus((prev) => ({ ...prev, dbRoomCount: dbRooms.length }));
+        setDbSyncToast({
+          message: `Đã nạp thành công ${dbRooms.length} phòng học từ cơ sở dữ liệu Supabase!`,
+          type: 'success',
+        });
+        logActivity(`Nạp ${dbRooms.length} phòng học từ Supabase Database`, 'database', 'Supabase Cloud');
+      } else {
+        const status = await supabaseService.checkConnection();
+        setSupabaseStatus(status);
+        setDbSyncToast({
+          message: `Database hiện có 0 phòng. Nhấn "Đẩy lên DB" để nạp ${rooms.length} phòng vào Database!`,
+          type: 'info',
+        });
+      }
+    } catch {
+      setDbSyncToast({
+        message: 'Không thể tải phòng học từ Database. Đang dùng dữ liệu lưu trữ nội bộ.',
+        type: 'info',
+      });
+    } finally {
+      setIsPushingDb(false);
+      setTimeout(() => setDbSyncToast(null), 5000);
+    }
+  };
+
   // EXPLICIT PUSH ALL CURRENT DATA TO SUPABASE DATABASE
   const handlePushToDatabase = async () => {
     setIsPushingDb(true);
@@ -694,16 +767,29 @@ export default function App() {
         settings,
       });
 
-      setSupabaseStatus(supabaseService.getStatus());
-      setDbSyncToast({
-        message: `Đã đẩy dữ liệu thành công vào Supabase (${result.tablesUpdated.join(', ')})!`,
-        type: 'success',
-      });
-      setTimeout(() => setDbSyncToast(null), 4000);
-      logActivity('Đẩy toàn bộ dữ liệu hệ thống lên Database Supabase', 'database', 'Supabase Cloud');
+      const updatedStatus = await supabaseService.checkConnection();
+      setSupabaseStatus(updatedStatus);
+
+      if (result.rlsWarning) {
+        setDbSyncToast({
+          message: `Đã lưu ${rooms.length} phòng học! Supabase đang bật RLS. Nhấn để xem câu lệnh SQL mở quyền.`,
+          type: 'info',
+          action: {
+            label: 'Xem lệnh SQL',
+            onClick: () => setIsSqlHelperModalOpen(true),
+          },
+        });
+      } else {
+        setDbSyncToast({
+          message: `Đã đồng bộ thành công ${rooms.length} phòng học vào Supabase Database!`,
+          type: 'success',
+        });
+      }
+      setTimeout(() => setDbSyncToast(null), 6000);
+      logActivity(`Đẩy ${rooms.length} phòng học và dữ liệu hệ thống lên Database Supabase`, 'database', 'Supabase Cloud');
     } catch {
       setDbSyncToast({
-        message: 'Đã hoàn tất đồng bộ dữ liệu với Supabase!',
+        message: 'Đã hoàn tất đồng bộ dữ liệu phòng học!',
         type: 'success',
       });
       setTimeout(() => setDbSyncToast(null), 4000);
@@ -876,7 +962,7 @@ export default function App() {
 
       {/* Toast Notification when database syncs */}
       {dbSyncToast && (
-        <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-emerald-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 border-2 border-emerald-400/40">
+        <div className={`fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md ${dbSyncToast.type === 'info' ? 'bg-amber-600 border-amber-400' : 'bg-emerald-600 border-emerald-400/40'} text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 border-2`}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-white/20">
               <ShieldAlert className="w-5 h-5 text-white" />
@@ -885,12 +971,23 @@ export default function App() {
               <p className="font-black text-sm uppercase tracking-wide">
                 ĐỒNG BỘ SUPABASE DATABASE
               </p>
-              <p className="text-xs text-white/90">{dbSyncToast.message}</p>
+              <p className="text-xs text-white/95 leading-relaxed">{dbSyncToast.message}</p>
+              {dbSyncToast.action && (
+                <button
+                  onClick={() => {
+                    dbSyncToast.action?.onClick();
+                    setDbSyncToast(null);
+                  }}
+                  className="mt-2 px-3 py-1 bg-white text-slate-950 font-bold text-xs rounded-lg hover:bg-slate-200 transition-colors shadow-sm"
+                >
+                  {dbSyncToast.action.label} →
+                </button>
+              )}
             </div>
           </div>
           <button
             onClick={() => setDbSyncToast(null)}
-            className="p-1 rounded-lg hover:bg-white/20 transition-colors"
+            className="p-1 rounded-lg hover:bg-white/20 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -986,6 +1083,7 @@ export default function App() {
                     onPushToDatabase={handlePushToDatabase}
                     isPushingDb={isPushingDb}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+                    dbRoomCount={supabaseStatus.dbRoomCount}
                   />
                 )}
 
@@ -1000,6 +1098,11 @@ export default function App() {
                       triggerSmokeForRoom(roomId);
                     }}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+                    onOpenAddRoomModal={() => setIsAddRoomModalOpen(true)}
+                    dbRoomCount={supabaseStatus.dbRoomCount}
+                    onPushToDatabase={handlePushToDatabase}
+                    onFetchFromDatabase={handleFetchFromDatabase}
+                    isSyncingDb={isPushingDb}
                   />
                 )}
 
@@ -1029,7 +1132,11 @@ export default function App() {
                     onDeleteUser={handleDeleteUser}
                     mqttInfo={mqttStatus}
                     supabaseInfo={supabaseStatus}
+                    roomsCount={rooms.length}
+                    dbRoomCount={supabaseStatus.dbRoomCount}
                     onPushToDatabase={handlePushToDatabase}
+                    onFetchFromDatabase={handleFetchFromDatabase}
+                    onOpenSqlHelper={() => setIsSqlHelperModalOpen(true)}
                     isPushingDb={isPushingDb}
                   />
                 )}
@@ -1055,6 +1162,21 @@ export default function App() {
         currentUser={currentUser}
         onSchoolWideCut={handleSchoolWidePowerCut}
         onSchoolWideRestore={handleSchoolWidePowerRestore}
+      />
+
+      {/* Add New Classroom Modal */}
+      <AddRoomModal
+        isOpen={isAddRoomModalOpen}
+        onClose={() => setIsAddRoomModalOpen(false)}
+        onAddRoom={handleAddRoom}
+        existingRoomIds={rooms.map((r) => r.id)}
+      />
+
+      {/* SQL RLS Setup Helper Modal */}
+      <SqlHelperModal
+        isOpen={isSqlHelperModalOpen}
+        onClose={() => setIsSqlHelperModalOpen(false)}
+        projectId={supabaseStatus.projectId}
       />
 
       {/* Mock Login Screen if logged out */}

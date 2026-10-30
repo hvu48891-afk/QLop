@@ -38,6 +38,7 @@ interface DashboardTabProps {
   onPushToDatabase?: () => Promise<void> | void;
   isPushingDb?: boolean;
   onOpenSchoolPowerModal?: () => void;
+  dbRoomCount?: number;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -52,6 +53,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onPushToDatabase,
   isPushingDb,
   onOpenSchoolPowerModal,
+  dbRoomCount,
 }) => {
   // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
   const [alertViewMode, setAlertViewMode] = useState<'unresolved' | 'resolved'>('unresolved');
@@ -215,7 +217,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 disabled:opacity-50"
             >
               <Database className={`w-3.5 h-3.5 ${isPushingDb ? 'animate-spin' : ''}`} />
-              <span>{isPushingDb ? 'Đang đẩy dữ liệu...' : 'Đẩy dữ liệu vào Database'}</span>
+              <span>{isPushingDb ? 'Đang đồng bộ...' : `Đồng bộ ${totalRooms} phòng lên DB`}</span>
             </button>
           )}
 
