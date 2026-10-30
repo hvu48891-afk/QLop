@@ -81,6 +81,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [autoAlertOffHours, setAutoAlertOffHours] = useState(settings.autoAlertOffHours);
   const [isSavedToast, setIsSavedToast] = useState(false);
 
+  // Đồng bộ khi settings được tải từ bảng settings (id = 1)
+  React.useEffect(() => {
+    setTempThreshold(settings.highTempThreshold);
+    setSmokeThreshold(settings.smokeThreshold);
+    setSoundEnabled(settings.soundEnabled);
+    setAutoAlertOffHours(settings.autoAlertOffHours);
+  }, [settings.highTempThreshold, settings.smokeThreshold, settings.soundEnabled, settings.autoAlertOffHours]);
+
   // User management modals
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);

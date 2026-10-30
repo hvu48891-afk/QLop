@@ -47,18 +47,21 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
 
     const newRoom: Room = {
       id: cleanId,
+      code: cleanId,
       name,
       building,
       floor,
       capacity,
+      status: isPowerOn ? 'on' : 'off',
       isPowerOn,
       isOccupied: isPowerOn,
       hasFireAlarm: false,
-      smokeLevel: Math.floor(Math.random() * 20) + 25,
+      smokeLevel: 25,
       temperature: 25.0,
       humidity: 60,
       emergencyPowerCut: false,
       lastUpdated: 'Vừa tạo',
+      updatedAt: new Date().toISOString(),
       devices: {
         light: {
           isOn: isPowerOn,
@@ -80,6 +83,7 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
           isOn: isPowerOn,
           speed: isPowerOn ? 2 : 0,
         },
+        curtain: 'stop',
       },
     };
 

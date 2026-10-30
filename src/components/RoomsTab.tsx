@@ -22,7 +22,11 @@ import {
   ZapOff,
   Plus,
   Database,
-  Building
+  Building,
+  Trash2,
+  WifiOff,
+  Wifi,
+  Cpu
 } from 'lucide-react';
 import { Room } from '../types';
 
@@ -37,6 +41,8 @@ interface RoomsTabProps {
   onPushToDatabase?: () => void;
   onFetchFromDatabase?: () => void;
   isSyncingDb?: boolean;
+  onDeleteRoom?: (roomId: string, e: React.MouseEvent) => void;
+  onPurgeNonDbRooms?: () => void;
 }
 
 export const RoomsTab: React.FC<RoomsTabProps> = ({
@@ -50,6 +56,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   onPushToDatabase,
   onFetchFromDatabase,
   isSyncingDb,
+  onDeleteRoom,
+  onPurgeNonDbRooms,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBuilding, setSelectedBuilding] = useState<string>('all');
@@ -149,7 +157,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </button>
           )}
 
-          {onFetchFromDatabase && dbRoomCount !== undefined && dbRoomCount > 0 && (
+          {onFetchFromDatabase && (
             <button
               onClick={onFetchFromDatabase}
               title="Tải danh sách phòng học từ Supabase về hệ thống"
@@ -157,6 +165,17 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             >
               <Database className="w-3.5 h-3.5 text-cyan-400" />
               <span>Nạp từ DB</span>
+            </button>
+          )}
+
+          {onPurgeNonDbRooms && (
+            <button
+              onClick={onPurgeNonDbRooms}
+              title="Xóa tất cả các phòng không có trong Database Supabase"
+              className="flex-1 md:flex-none px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-red-950/40 text-red-400 hover:text-red-300 border border-red-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xoá phòng ngoài DB</span>
             </button>
           )}
         </div>
@@ -231,21 +250,23 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       {/* Grid of Classrooms */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-5">
         {filteredRooms.map((room) => {
-          const isAlarm = room.hasFireAlarm || room.smokeLevel > 300;
-          const isPowerOn = room.isPowerOn && !room.emergencyPowerCut;
+          const isAlarm = room.status === 'alert' || room.hasFireAlarm || room.smokeLevel >= 350;
+          const isPowerOn = room.status === 'on' || (room.isPowerOn && room.status !== 'off');
 
           // Card Background & Border Style as specified:
-          // Xám = tắt điện
-          // Sáng/vàng = đang bật
-          // Đỏ nhấp nháy (animation) = có cháy/khói
+          // off = xám
+          // on = sáng
+          // alert = đỏ nhấp nháy
           let cardStyle = 'bg-slate-900/60 border-slate-800 text-slate-400';
           if (isAlarm) {
             cardStyle =
               'bg-red-950/90 border-red-500 ring-2 ring-red-500 animate-pulse text-red-100 shadow-2xl shadow-red-500/30';
           } else if (isPowerOn) {
             cardStyle =
-              'bg-gradient-to-b from-slate-900 to-slate-900/90 border-amber-500/50 shadow-xl shadow-amber-500/5 text-slate-200 ring-1 ring-amber-500/20';
+              'bg-gradient-to-b from-slate-900 to-slate-900/90 border-amber-500/50 shadow-xl shadow-amber-500/10 text-slate-200 ring-1 ring-amber-500/20';
           }
+
+          const isHardwareRoom = room.code === 'A201';
 
           return (
             <div
@@ -265,23 +286,48 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                         : 'bg-slate-800 text-slate-500'
                     }`}
                   >
-                    {isAlarm ? <Flame className="w-6 h-6" /> : room.id}
+                    {isAlarm ? <Flame className="w-6 h-6" /> : room.code || room.id}
                   </div>
                   <div>
-                    <h3 className="font-bold text-white text-base group-hover:text-orange-400 transition-colors flex items-center gap-1.5">
-                      {room.name}
-                      <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      {room.building} • Tầng {room.floor}
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="font-bold text-white text-base group-hover:text-orange-400 transition-colors flex items-center gap-1.5">
+                        {room.name}
+                        <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h3>
+
+                      {isHardwareRoom && (
+                        <span className="px-2 py-0.5 rounded-md bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] font-bold flex items-center gap-1">
+                          <Cpu className="w-3 h-3" />
+                          <span>Mạch thật A201</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-slate-400">
+                        {room.building} • Tầng {room.floor}
+                      </p>
+
+                      {/* Nhãn "Mất kết nối" nếu updated_at cũ hơn 30 giây */}
+                      {room.isDisconnected ? (
+                        <span className="px-2 py-0.5 rounded-md bg-red-500/20 text-red-300 border border-red-500/40 text-[10px] font-bold flex items-center gap-1">
+                          <WifiOff className="w-3 h-3 text-red-400" />
+                          <span>Mất kết nối</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-semibold flex items-center gap-1">
+                          <Wifi className="w-3 h-3 text-emerald-400" />
+                          <span>Realtime</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Direct Power Switch Button on card */}
                 <button
                   onClick={(e) => onToggleRoomPower(room.id, e)}
-                  title={isPowerOn ? 'Tắt điện phòng' : 'Bật điện phòng'}
+                  title={isPowerOn ? 'Tắt điện phòng (power_on: false)' : 'Bật điện phòng (power_on: true)'}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
                     isPowerOn
                       ? 'bg-amber-500 text-slate-950 font-bold hover:bg-amber-400'

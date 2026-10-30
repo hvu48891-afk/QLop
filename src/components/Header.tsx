@@ -16,7 +16,9 @@ import {
   Zap,
   ZapOff,
   Clock,
-  FastForward
+  FastForward,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import { User, TabType } from '../types';
 
@@ -35,6 +37,8 @@ interface HeaderProps {
   onOpenTimeSyncModal?: () => void;
   onOpenSchoolPowerModal?: () => void;
   poweredOnCount?: number;
+  onSyncDatabase?: () => void;
+  isSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,6 +56,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTimeSyncModal,
   onOpenSchoolPowerModal,
   poweredOnCount = 0,
+  onSyncDatabase,
+  isSyncing = false,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -146,6 +152,19 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
         </button>
+
+        {/* Sync with Supabase Button */}
+        {onSyncDatabase && (
+          <button
+            onClick={onSyncDatabase}
+            disabled={isSyncing}
+            title="Đồng bộ dữ liệu ngay từ cơ sở dữ liệu Supabase"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Đồng bộ DB</span>
+          </button>
+        )}
 
         {/* Quick Simulation Trigger Buttons */}
         <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">

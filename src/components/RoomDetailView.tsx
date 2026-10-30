@@ -22,9 +22,13 @@ import {
   Sparkles,
   Volume2,
   Share2,
-  ShieldAlert
+  ShieldAlert,
+  Blinds,
+  ArrowUp,
+  ArrowDown,
+  Square
 } from 'lucide-react';
-import { Room, LightPreset, AcMode, AcFanSpeed, ProjectorInput } from '../types';
+import { Room, LightPreset, AcMode, AcFanSpeed, ProjectorInput, CurtainState } from '../types';
 import { soundManager } from '../utils/soundEffects';
 
 interface RoomDetailViewProps {
@@ -34,6 +38,7 @@ interface RoomDetailViewProps {
   onEmergencyCut: (roomId: string, cutOff: boolean) => void;
   onTriggerSmokeForRoom: (roomId: string) => void;
   onClearSmokeForRoom: (roomId: string) => void;
+  onUpdateCurtain?: (roomCode: string, curtain: CurtainState) => void;
   soundEnabled: boolean;
 }
 
@@ -44,6 +49,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   onEmergencyCut,
   onTriggerSmokeForRoom,
   onClearSmokeForRoom,
+  onUpdateCurtain,
   soundEnabled,
 }) => {
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -241,6 +247,21 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
           isOn: true,
           speed,
         },
+      },
+    });
+  };
+
+  // CURTAIN CONTROLS (Lên / Xuống / Dừng)
+  const handleCurtain = (action: CurtainState) => {
+    playClick();
+    if (onUpdateCurtain) {
+      onUpdateCurtain(room.code, action);
+    }
+    onUpdateRoom({
+      ...room,
+      devices: {
+        ...room.devices,
+        curtain: action,
       },
     });
   };
@@ -816,6 +837,85 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                     Cấp {spd}
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rèm cửa thông minh (Smart Curtains - Lên / Dừng / Xuống) */}
+        <div className="p-5 rounded-3xl bg-slate-900/95 border border-slate-800 shadow-xl flex flex-col justify-between md:col-span-2">
+          <div>
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-800/80">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-md shadow-blue-500/10"
+                >
+                  <Blinds className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Rèm cửa thông minh</h3>
+                  <p className="text-xs text-slate-400">
+                    Trạng thái:{' '}
+                    <strong className="text-blue-300">
+                      {room.devices.curtain === 'up'
+                        ? 'Đang mở (Lên)'
+                        : room.devices.curtain === 'down'
+                        ? 'Đang đóng (Xuống)'
+                        : 'Đang dừng'}
+                    </strong>
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 font-mono">
+                Cột DB: curtain
+              </span>
+            </div>
+
+            {/* 3 Nút: Lên / Dừng / Xuống */}
+            <div>
+              <p className="text-xs text-slate-400 font-semibold mb-2 uppercase tracking-wider">
+                Chế độ rèm cửa
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => handleCurtain('up')}
+                  disabled={room.emergencyPowerCut}
+                  className={`py-3 px-4 text-xs rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${
+                    room.devices.curtain === 'up'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400'
+                      : 'bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800'
+                  } disabled:opacity-40 active:scale-95`}
+                >
+                  <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+                  <span>Kéo Lên (Up)</span>
+                </button>
+
+                <button
+                  onClick={() => handleCurtain('stop')}
+                  disabled={room.emergencyPowerCut}
+                  className={`py-3 px-4 text-xs rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${
+                    room.devices.curtain === 'stop'
+                      ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30 ring-2 ring-amber-400'
+                      : 'bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800'
+                  } disabled:opacity-40 active:scale-95`}
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Dừng (Stop)</span>
+                </button>
+
+                <button
+                  onClick={() => handleCurtain('down')}
+                  disabled={room.emergencyPowerCut}
+                  className={`py-3 px-4 text-xs rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${
+                    room.devices.curtain === 'down'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400'
+                      : 'bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800'
+                  } disabled:opacity-40 active:scale-95`}
+                >
+                  <ArrowDown className="w-4 h-4 stroke-[2.5]" />
+                  <span>Hạ Xuống (Down)</span>
+                </button>
               </div>
             </div>
           </div>

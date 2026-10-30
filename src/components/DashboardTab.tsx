@@ -58,16 +58,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
   const [alertViewMode, setAlertViewMode] = useState<'unresolved' | 'resolved'>('unresolved');
 
-  // Stats calculation
+  // Stats calculation theo đúng đặc tả Supabase
   const totalRooms = rooms.length;
-  const poweredOnRooms = rooms.filter((r) => r.isPowerOn && !r.emergencyPowerCut).length;
-  const emptyRooms = rooms.filter((r) => !r.isOccupied).length;
-  const emptyPoweredOnRooms = rooms.filter((r) => !r.isOccupied && r.isPowerOn).length;
+  const poweredOnRooms = rooms.filter((r) => r.status === 'on' || r.status === 'alert').length;
+  const emptyRooms = rooms.filter((r) => r.status === 'off').length;
+  const emptyPoweredOnRooms = rooms.filter((r) => r.status === 'off' && r.isPowerOn).length;
   
-  // Active/unresolved vs resolved alerts
-  const unresolvedAlerts = alerts.filter((a) => !a.isResolved);
-  const resolvedAlerts = alerts.filter((a) => a.isResolved);
-  const criticalAlarmCount = rooms.filter((r) => r.hasFireAlarm || r.smokeLevel > 300).length;
+  // Active/unresolved vs resolved alerts, sắp xếp created_at giảm dần
+  const sortedAlerts = [...alerts].sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return timeB - timeA;
+  });
+  const unresolvedAlerts = sortedAlerts.filter((a) => !a.isResolved);
+  const resolvedAlerts = sortedAlerts.filter((a) => a.isResolved);
+  const criticalAlarmCount = rooms.filter((r) => r.status === 'alert' || r.hasFireAlarm || r.smokeLevel >= 350).length;
 
   const displayedAlerts = alertViewMode === 'unresolved' ? unresolvedAlerts : resolvedAlerts;
 
@@ -103,7 +108,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <span className="text-sm font-semibold text-slate-400">/ {totalRooms} phòng</span>
           </div>
           <div className="mt-2 flex items-center justify-between text-[11px] text-amber-300">
-            <span>Tỷ lệ tải điện: {Math.round((poweredOnRooms / totalRooms) * 100)}%</span>
+            <span>Tỷ lệ tải điện: {totalRooms > 0 ? Math.round((poweredOnRooms / totalRooms) * 100) : 0}%</span>
           </div>
         </div>
 
