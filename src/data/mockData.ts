@@ -5,35 +5,7 @@
 
 import { Room, AlertLog, ScheduleRule, User, ThresholdSettings, ActivityLog } from '../types';
 
-export const INITIAL_USERS: User[] = [
-  {
-    id: 'u1',
-    name: 'ThS. Nguyễn Văn An',
-    email: 'admin.an@school.edu.vn',
-    role: 'admin',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    status: 'active',
-    createdAt: '15/01/2026',
-  },
-  {
-    id: 'u2',
-    name: 'Trần Thị Mai (Giám thị Tòa A)',
-    email: 'mai.tran@school.edu.vn',
-    role: 'supervisor',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
-    status: 'active',
-    createdAt: '01/03/2026',
-  },
-  {
-    id: 'u3',
-    name: 'Lê Hoàng Nam (Giám thị Tòa B-C)',
-    email: 'nam.le@school.edu.vn',
-    role: 'supervisor',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    status: 'active',
-    createdAt: '10/05/2026',
-  },
-];
+export const INITIAL_USERS: User[] = [];
 
 export const INITIAL_ROOMS: Room[] = [];
 

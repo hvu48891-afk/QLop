@@ -37,12 +37,16 @@ ALTER TABLE IF EXISTS public.schedules DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.settings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.profiles DISABLE ROW LEVEL SECURITY;
 
--- 2. CẤP TOÀN QUYỀN TRUY CẬP CHO ANON VÀ AUTHENTICATED
+-- 2. CHO PHÉP TẠO TÀI KHOẢN VÀO BẢNG PROFILES TỰ DO (BỎ RÀNG BUỘC AUTH.USERS)
+ALTER TABLE IF EXISTS public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+ALTER TABLE IF EXISTS public.profiles ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+-- 3. CẤP TOÀN QUYỀN TRUY CẬP CHO ANON VÀ AUTHENTICATED
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 
--- 3. NẾU MUỐN GIỮ RLS, TẠO POLICY MỞ CHO TẤT CẢ:
+-- 4. NẾU MUỐN BẬT RLS, TẠO POLICY MỞ CHO TẤT CẢ:
 DROP POLICY IF EXISTS "Public access rooms" ON public.rooms;
 CREATE POLICY "Public access rooms" ON public.rooms FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 

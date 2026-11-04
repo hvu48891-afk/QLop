@@ -22,7 +22,8 @@ import {
   KeyRound,
   ExternalLink,
   Save,
-  Database
+  Database,
+  Sparkles
 } from 'lucide-react';
 import { ThresholdSettings, User, UserRole } from '../types';
 
@@ -152,6 +153,22 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       });
     }
     setIsUserModalOpen(false);
+  };
+
+  const handlePromoteToAdmin = (targetUser: User) => {
+    if (!isAdmin) return;
+    onUpdateUser({
+      ...targetUser,
+      role: 'admin',
+    });
+  };
+
+  const handleDemoteToSupervisor = (targetUser: User) => {
+    if (!isAdmin) return;
+    onUpdateUser({
+      ...targetUser,
+      role: 'supervisor',
+    });
   };
 
   return (
@@ -333,6 +350,18 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           )}
         </div>
 
+        {/* Thông báo chính sách phân quyền an toàn */}
+        <div className="p-3.5 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-blue-200 text-xs flex items-start gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <p className="font-bold text-white text-xs">Chính sách Phân quyền Quản trị viên</p>
+            <p className="text-[11px] text-slate-300 mt-0.5">
+              Hệ thống chỉ cho phép duy nhất 1 Quản trị viên được tự đăng ký tại màn hình ngoài. Tất cả các tài khoản mới khác đều có vai trò <strong>Giám thị</strong>.
+              Quản trị viên có thể bấm nút <strong className="text-amber-300">"Cấp quyền Admin"</strong> bên dưới để nâng quyền cho bất kỳ Giám thị nào.
+            </p>
+          </div>
+        </div>
+
         {/* User Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -374,16 +403,41 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                     <td className="py-3 px-3 text-slate-300 font-mono">{u.email}</td>
 
                     <td className="py-3 px-3">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                          u.role === 'admin'
-                            ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
-                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                        }`}
-                      >
-                        <ShieldCheck className="w-3 h-3" />
-                        {u.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            u.role === 'admin'
+                              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                              : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          }`}
+                        >
+                          <ShieldCheck className="w-3 h-3" />
+                          {u.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
+                        </span>
+
+                        {isAdmin && !isCurrent && u.role === 'supervisor' && (
+                          <button
+                            type="button"
+                            onClick={() => handlePromoteToAdmin(u)}
+                            title={`Cấp quyền Quản trị viên (Admin) cho ${u.name}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 font-bold text-[10px] transition-all active:scale-95 shadow-sm"
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>Cấp quyền Admin</span>
+                          </button>
+                        )}
+
+                        {isAdmin && !isCurrent && u.role === 'admin' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDemoteToSupervisor(u)}
+                            title={`Hạ quyền của ${u.name} xuống Giám thị`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 text-[10px] transition-all"
+                          >
+                            <span>Hạ xuống Giám thị</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-3 px-3">
@@ -624,10 +678,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                   <select
                     value={userRole}
                     onChange={(e) => setUserRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-blue-500 font-medium"
                   >
-                    <option value="supervisor">Giám thị</option>
-                    <option value="admin">Quản trị viên</option>
+                    <option value="supervisor">Giám thị (Supervisor)</option>
+                    <option value="admin">Quản trị viên (Admin - Toàn quyền)</option>
                   </select>
                 </div>
 

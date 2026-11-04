@@ -194,17 +194,17 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onOpenSchoolPowerModal}
             title="Mở bảng điều khiển cắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all active:scale-95 shadow-md ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
               poweredOnCount > 0
-                ? 'bg-red-950/80 hover:bg-red-900 border-red-500/60 text-red-200 hover:text-white shadow-red-950/40 ring-1 ring-red-500/40'
-                : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-400'
+                ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200'
+                : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-slate-500'
             }`}
           >
-            <ZapOff className={`w-3.5 h-3.5 ${poweredOnCount > 0 ? 'text-red-400 animate-pulse' : 'text-slate-500'}`} />
+            <ZapOff className={`w-3.5 h-3.5 ${poweredOnCount > 0 ? 'text-amber-400' : 'text-slate-500'}`} />
             <span className="hidden sm:inline">Tắt điện toàn trường</span>
-            <span className="sm:hidden">Cắt điện</span>
+            <span className="sm:hidden">Tắt điện</span>
             {poweredOnCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-[10px] font-black text-white ml-0.5">
+              <span className="px-1.5 py-0.2 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300 ml-0.5">
                 {poweredOnCount}
               </span>
             )}
@@ -250,37 +250,41 @@ export const Header: React.FC<HeaderProps> = ({
                     </span>
                   </div>
 
-                  <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Đổi tài khoản mô phỏng:
-                  </div>
-
-                  {allUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        onSwitchUser(u);
-                        setUserDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors ${
-                        u.id === currentUser.id
-                          ? 'bg-orange-500/15 text-orange-300 font-bold'
-                          : 'text-slate-300 hover:bg-slate-800/70'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <img src={u.avatar} alt={u.name} className="w-6 h-6 rounded-md object-cover" />
-                        <div>
-                          <p className="text-xs leading-tight">{u.name}</p>
-                          <p className="text-[10px] text-slate-400">
-                            {u.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
-                          </p>
-                        </div>
+                  {allUsers.length > 1 && (
+                    <>
+                      <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Tài khoản Database khác:
                       </div>
-                      {u.id === currentUser.id && (
-                        <span className="text-[10px] text-orange-400 font-bold">Hiện tại</span>
-                      )}
-                    </button>
-                  ))}
+
+                      {allUsers.map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => {
+                            onSwitchUser(u);
+                            setUserDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors ${
+                            u.id === currentUser.id
+                              ? 'bg-orange-500/15 text-orange-300 font-bold'
+                              : 'text-slate-300 hover:bg-slate-800/70'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <img src={u.avatar} alt={u.name} className="w-6 h-6 rounded-md object-cover" />
+                            <div>
+                              <p className="text-xs leading-tight">{u.name}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {u.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
+                              </p>
+                            </div>
+                          </div>
+                          {u.id === currentUser.id && (
+                            <span className="text-[10px] text-orange-400 font-bold">Hiện tại</span>
+                          )}
+                        </button>
+                      ))}
+                    </>
+                  )}
 
                   <div className="border-t border-slate-800/80 mt-1 pt-1">
                     <button

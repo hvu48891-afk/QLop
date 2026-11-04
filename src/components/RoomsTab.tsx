@@ -28,10 +28,11 @@ import {
   Wifi,
   Cpu
 } from 'lucide-react';
-import { Room } from '../types';
+import { Room, User } from '../types';
 
 interface RoomsTabProps {
   rooms: Room[];
+  currentUser?: User | null;
   onSelectRoom: (room: Room) => void;
   onToggleRoomPower: (roomId: string, e: React.MouseEvent) => void;
   onTriggerSmoke: (roomId: string, e: React.MouseEvent) => void;
@@ -47,6 +48,7 @@ interface RoomsTabProps {
 
 export const RoomsTab: React.FC<RoomsTabProps> = ({
   rooms,
+  currentUser,
   onSelectRoom,
   onToggleRoomPower,
   onTriggerSmoke,
@@ -59,6 +61,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   onDeleteRoom,
   onPurgeNonDbRooms,
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBuilding, setSelectedBuilding] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -135,14 +138,24 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {onOpenAddRoomModal && (
-            <button
-              onClick={onOpenAddRoomModal}
-              title="Thêm phòng học mới vào hệ thống"
-              className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Thêm phòng học</span>
-            </button>
+            isAdmin ? (
+              <button
+                onClick={onOpenAddRoomModal}
+                title="Thêm phòng học mới vào hệ thống (Quản trị viên)"
+                className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Thêm phòng học</span>
+              </button>
+            ) : (
+              <div
+                title="Chỉ Quản trị viên (Admin) mới có quyền thêm phòng học mới"
+                className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed select-none"
+              >
+                <Plus className="w-3.5 h-3.5 opacity-40" />
+                <span>Thêm phòng (Chỉ Admin)</span>
+              </div>
+            )
           )}
 
           {onPushToDatabase && (
@@ -238,10 +251,10 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
         {onOpenSchoolPowerModal && (
           <button
             onClick={onOpenSchoolPowerModal}
-            title="Mở bảng điều khiển cắt điện toàn trường"
-            className="px-3.5 py-2 rounded-xl bg-red-600/90 hover:bg-red-600 active:scale-95 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-red-600/20 whitespace-nowrap"
+            title="Mở bảng điều khiển tắt điện toàn trường"
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap"
           >
-            <ZapOff className="w-3.5 h-3.5" />
+            <ZapOff className="w-3.5 h-3.5 text-amber-400" />
             <span>Tắt điện toàn trường</span>
           </button>
         )}
@@ -324,32 +337,38 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Direct Power Switch Button on card */}
-                <button
-                  onClick={(e) => onToggleRoomPower(room.id, e)}
-                  title={isPowerOn ? 'Tắt điện phòng (power_on: false)' : 'Bật điện phòng (power_on: true)'}
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                    isPowerOn
-                      ? 'bg-amber-500 text-slate-950 font-bold hover:bg-amber-400'
-                      : 'bg-slate-800 text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  <Power className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                {/* Action buttons on card (Delete & Power) */}
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  {isAdmin && onDeleteRoom && (
+                    <button
+                      onClick={(e) => onDeleteRoom(room.code || room.id, e)}
+                      title="Xóa phòng học này khỏi hệ thống và Database Supabase (Quản trị viên)"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700/60 hover:border-red-500/40 transition-all active:scale-95"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Direct Power Switch Button on card */}
+                  <button
+                    onClick={(e) => onToggleRoomPower(room.id, e)}
+                    title={isPowerOn ? 'Tắt điện phòng (power_on: false)' : 'Bật điện phòng (power_on: true)'}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                      isPowerOn
+                        ? 'bg-amber-500 text-slate-950 font-bold hover:bg-amber-400'
+                        : 'bg-slate-800 text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    <Power className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </div>
               </div>
 
-              {/* Status Alert Badge if any */}
+              {/* Status Alert Badge if fire alarm */}
               {isAlarm && (
                 <div className="mb-3 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold flex items-center gap-1.5">
                   <Flame className="w-4 h-4 shrink-0" />
                   <span>CẢNH BÁO KHÓI/CHÁY ({room.smokeLevel} ppm)</span>
-                </div>
-              )}
-
-              {room.emergencyPowerCut && !isAlarm && (
-                <div className="mb-3 px-3 py-1 rounded-xl bg-red-500/20 text-red-300 border border-red-500/40 text-[11px] font-bold flex items-center gap-1">
-                  <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                  <span>Đã ngắt điện khẩn cấp</span>
                 </div>
               )}
 

@@ -23,35 +23,35 @@ import {
   Volume2,
   Share2,
   ShieldAlert,
-  Blinds,
-  ArrowUp,
-  ArrowDown,
-  Square
+  Trash2
 } from 'lucide-react';
-import { Room, LightPreset, AcMode, AcFanSpeed, ProjectorInput, CurtainState } from '../types';
+import { Room, LightPreset, AcMode, AcFanSpeed, ProjectorInput, User } from '../types';
 import { soundManager } from '../utils/soundEffects';
 
 interface RoomDetailViewProps {
   room: Room;
+  currentUser?: User | null;
   onBack: () => void;
   onUpdateRoom: (updated: Room) => void;
   onEmergencyCut: (roomId: string, cutOff: boolean) => void;
   onTriggerSmokeForRoom: (roomId: string) => void;
   onClearSmokeForRoom: (roomId: string) => void;
-  onUpdateCurtain?: (roomCode: string, curtain: CurtainState) => void;
+  onDeleteRoom?: (roomCode: string) => void;
   soundEnabled: boolean;
 }
 
 export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   room,
+  currentUser,
   onBack,
   onUpdateRoom,
   onEmergencyCut,
   onTriggerSmokeForRoom,
   onClearSmokeForRoom,
-  onUpdateCurtain,
+  onDeleteRoom,
   soundEnabled,
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   // Helper sound player
@@ -251,21 +251,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
     });
   };
 
-  // CURTAIN CONTROLS (Lên / Xuống / Dừng)
-  const handleCurtain = (action: CurtainState) => {
-    playClick();
-    if (onUpdateCurtain) {
-      onUpdateCurtain(room.code, action);
-    }
-    onUpdateRoom({
-      ...room,
-      devices: {
-        ...room.devices,
-        curtain: action,
-      },
-    });
-  };
-
   const isAlarm = room.hasFireAlarm || room.smokeLevel > 300;
 
   return (
@@ -315,58 +300,37 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             </button>
           )}
 
+          {/* Delete room button (Admin only) */}
+          {isAdmin && onDeleteRoom && (
+            <button
+              onClick={() => onDeleteRoom(room.code || room.id)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-500/40 text-xs font-semibold transition-all active:scale-95"
+              title="Xóa phòng học này khỏi hệ thống và database (Quản trị viên)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">Xóa phòng</span>
+            </button>
+          )}
+
           {/* Master power status pill */}
           <div
             className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${
-              room.emergencyPowerCut
-                ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                : room.isPowerOn
+              room.isPowerOn
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 : 'bg-slate-800 text-slate-400 border border-slate-700'
             }`}
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                room.emergencyPowerCut
-                  ? 'bg-red-500 animate-ping'
-                  : room.isPowerOn
-                  ? 'bg-emerald-400'
-                  : 'bg-slate-500'
+                room.isPowerOn ? 'bg-emerald-400' : 'bg-slate-500'
               }`}
             />
             <span>
-              {room.emergencyPowerCut
-                ? 'NGẮT ĐIỆN KHẨN CẤP'
-                : room.isPowerOn
-                ? 'ĐANG MỞ ĐIỆN'
-                : 'ĐÃ TẮT ĐIỆN'}
+              {room.isPowerOn ? 'ĐANG MỞ ĐIỆN' : 'ĐÃ TẮT ĐIỆN'}
             </span>
           </div>
         </div>
       </div>
-
-      {/* Emergency banner if power cut */}
-      {room.emergencyPowerCut && (
-        <div className="p-4 rounded-2xl bg-red-950/80 border-2 border-red-500 text-red-200 flex items-center justify-between gap-4 animate-pulse">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="w-8 h-8 text-red-500 shrink-0" />
-            <div>
-              <p className="font-bold text-red-300 text-sm sm:text-base">
-                PHÒNG ĐANG Ở CHẾ ĐỘ NGẮT ĐIỆN KHẨN CẤP!
-              </p>
-              <p className="text-xs text-slate-300">
-                Toàn bộ nguồn điện tổng bị cô lập vì lý do an toàn. Nhấn nút bên phải để cấp lại điện.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => onEmergencyCut(room.id, false)}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shrink-0 transition-transform active:scale-95"
-          >
-            CẤP LẠI ĐIỆN PHÒNG
-          </button>
-        </div>
-      )}
 
       {/* ================= 1. SENSOR METRICS CARD (LARGE TEMP & HUMIDITY) ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -841,161 +805,49 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Rèm cửa thông minh (Smart Curtains - Lên / Dừng / Xuống) */}
-        <div className="p-5 rounded-3xl bg-slate-900/95 border border-slate-800 shadow-xl flex flex-col justify-between md:col-span-2">
-          <div>
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-800/80">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-md shadow-blue-500/10"
-                >
-                  <Blinds className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">Rèm cửa thông minh</h3>
-                  <p className="text-xs text-slate-400">
-                    Trạng thái:{' '}
-                    <strong className="text-blue-300">
-                      {room.devices.curtain === 'up'
-                        ? 'Đang mở (Lên)'
-                        : room.devices.curtain === 'down'
-                        ? 'Đang đóng (Xuống)'
-                        : 'Đang dừng'}
-                    </strong>
-                  </p>
-                </div>
-              </div>
-
-              <span className="px-3 py-1 rounded-xl bg-slate-800 text-xs text-slate-300 font-mono">
-                Cột DB: curtain
-              </span>
-            </div>
-
-            {/* 3 Nút: Lên / Dừng / Xuống */}
-            <div>
-              <p className="text-xs text-slate-400 font-semibold mb-2 uppercase tracking-wider">
-                Chế độ rèm cửa
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => handleCurtain('up')}
-                  disabled={room.emergencyPowerCut}
-                  className={`py-3 px-4 text-xs rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${
-                    room.devices.curtain === 'up'
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400'
-                      : 'bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800'
-                  } disabled:opacity-40 active:scale-95`}
-                >
-                  <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-                  <span>Kéo Lên (Up)</span>
-                </button>
-
-                <button
-                  onClick={() => handleCurtain('stop')}
-                  disabled={room.emergencyPowerCut}
-                  className={`py-3 px-4 text-xs rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${
-                    room.devices.curtain === 'stop'
-                      ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30 ring-2 ring-amber-400'
-                      : 'bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800'
-                  } disabled:opacity-40 active:scale-95`}
-                >
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Dừng (Stop)</span>
-                </button>
-
-                <button
-                  onClick={() => handleCurtain('down')}
-                  disabled={room.emergencyPowerCut}
-                  className={`py-3 px-4 text-xs rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${
-                    room.devices.curtain === 'down'
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 ring-2 ring-blue-400'
-                      : 'bg-slate-950/70 text-slate-300 hover:text-white border border-slate-800 hover:bg-slate-800'
-                  } disabled:opacity-40 active:scale-95`}
-                >
-                  <ArrowDown className="w-4 h-4 stroke-[2.5]" />
-                  <span>Hạ Xuống (Down)</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
 
-      {/* ================= 6. NÚT TẮT/MỞ ĐIỆN KHẨN CẤP (EMERGENCY POWER CUTOFF) ================= */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-red-950/70 to-slate-900 border-2 border-red-500/40 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* ================= 6. CÔNG TẮC ĐIỆN NGUỒN PHÒNG ================= */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5 text-center sm:text-left">
-          <div className="w-12 h-12 rounded-2xl bg-red-600/30 border border-red-500/50 flex items-center justify-center text-red-400 shrink-0">
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+            room.isPowerOn 
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+              : 'bg-slate-800 text-slate-400 border border-slate-700'
+          }`}>
             <Power className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div>
-            <h4 className="font-black text-white text-base sm:text-lg">
-              CÔNG TẮC KHẨN CẤP PHÒNG {room.id}
+            <h4 className="font-bold text-white text-base sm:text-lg">
+              CÔNG TẮC NGUỒN {room.name}
             </h4>
-            <p className="text-xs text-slate-300">
-              Ngắt ly lập tức toàn bộ rơ-le điện nguồn của phòng trong trường hợp phát hiện sự cố, cháy nổ.
+            <p className="text-xs text-slate-400">
+              {room.isPowerOn 
+                ? 'Phòng đang có điện. Bấm để tắt nguồn toàn bộ thiết bị trong phòng.' 
+                : 'Phòng đang tắt điện. Bấm để bật lại nguồn điện cho phòng.'}
             </p>
           </div>
         </div>
 
-        {room.emergencyPowerCut ? (
+        {room.isPowerOn ? (
           <button
-            onClick={() => onEmergencyCut(room.id, false)}
-            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm tracking-wide shadow-xl active:scale-95 transition-all uppercase"
+            onClick={() => onEmergencyCut(room.id, true)}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs tracking-wide shadow-md active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
           >
-            KHÔI PHỤC NGUỒN ĐIỆN
+            <Power className="w-4 h-4 text-slate-400" />
+            <span>TẮT ĐIỆN PHÒNG</span>
           </button>
         ) : (
           <button
-            onClick={() => setShowEmergencyModal(true)}
-            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-sm tracking-wide shadow-xl shadow-red-600/25 active:scale-95 transition-all uppercase animate-pulse"
+            onClick={() => onEmergencyCut(room.id, false)}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-emerald-600/25 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
           >
-            TẮT ĐIỆN KHẨN CẤP
+            <Power className="w-4 h-4 text-white" />
+            <span>BẬT ĐIỆN PHÒNG</span>
           </button>
         )}
       </div>
-
-      {/* ================= MODAL XÁC NHẬN CẮT ĐIỆN KHẨN CẤP ================= */}
-      {showEmergencyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-slate-900 border-2 border-red-500 rounded-3xl p-6 shadow-2xl text-center space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-red-500/20 border border-red-500 flex items-center justify-center mx-auto text-red-500">
-              <AlertTriangle className="w-9 h-9" />
-            </div>
-
-            <div>
-              <h3 className="text-xl font-black text-white">XÁC NHẬN NGẮT ĐIỆN KHẨN CẤP?</h3>
-              <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                Bạn sắp <strong className="text-red-400">CẮT TOÀN BỘ NGUỒN ĐIỆN</strong> của{' '}
-                <strong>{room.name}</strong>. Mọi thiết bị chiếu sáng, điều hòa, máy chiếu và quạt sẽ ngừng hoạt động ngay lập tức.
-              </p>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-amber-300 text-left">
-              ⚠️ Hành động này sẽ được ghi vào Nhật ký an toàn trường học.
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => setShowEmergencyModal(false)}
-                className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm transition-colors"
-              >
-                HỦY BỎ
-              </button>
-              <button
-                onClick={() => {
-                  setShowEmergencyModal(false);
-                  onEmergencyCut(room.id, true);
-                }}
-                className="py-3 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-sm transition-transform active:scale-95 shadow-lg shadow-red-600/30"
-              >
-                CẮT ĐIỆN NGAY
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

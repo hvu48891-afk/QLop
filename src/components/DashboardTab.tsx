@@ -230,10 +230,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           {onOpenSchoolPowerModal && (
             <button
               onClick={onOpenSchoolPowerModal}
-              title="Mở bảng điều khiển cắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
-              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-500 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-red-600/30"
+              title="Mở bảng điều khiển tắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 text-xs font-semibold transition-all flex items-center gap-1.5 shadow-md"
             >
-              <ZapOff className="w-3.5 h-3.5" />
+              <ZapOff className="w-3.5 h-3.5 text-amber-400" />
               <span>Tắt điện toàn trường ({poweredOnRooms})</span>
             </button>
           )}

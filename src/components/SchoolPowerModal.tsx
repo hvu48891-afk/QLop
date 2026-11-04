@@ -40,6 +40,7 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
   const [confirmed, setConfirmed] = useState(false);
   const [selectedMode, setSelectedMode] = useState<'emergency' | 'soft'>('emergency');
   const [isProcessing, setIsProcessing] = useState(false);
+  const isAdmin = currentUser?.role === 'admin';
 
   if (!isOpen) return null;
 
@@ -89,28 +90,28 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div 
-        className="relative w-full max-w-xl bg-slate-900 border-2 border-red-500/50 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with Emergency Siren Theme */}
-        <div className="bg-gradient-to-r from-red-950 via-slate-900 to-red-950 p-5 border-b border-red-500/30 flex items-center justify-between">
+        {/* Header */}
+        <div className="bg-slate-950 p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-red-600/20 text-red-400 border border-red-500/40 flex items-center justify-center animate-pulse">
+            <div className="w-12 h-12 rounded-2xl bg-slate-800 border border-slate-700 text-amber-400 flex items-center justify-center">
               <ZapOff className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/30 text-red-300 border border-red-500/40">
-                  Cầu Dao Tổng Trường
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+                  Cầu Dao Điện Tổng
                 </span>
                 <span className="text-xs text-slate-400 font-mono">
                   {new Date().toLocaleTimeString('vi-VN')}
                 </span>
               </div>
-              <h3 className="text-lg font-black text-white tracking-tight mt-0.5">
-                TẮT ĐIỆN TOÀN TRƯỜNG
+              <h3 className="text-lg font-bold text-white tracking-tight mt-0.5">
+                ĐIỀU KHIỂN NGUỒN ĐIỆN TOÀN TRƯỜNG
               </h3>
             </div>
           </div>
@@ -139,9 +140,9 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase">Đã ngắt khẩn cấp</p>
-              <p className="text-2xl font-black text-red-400 font-mono mt-0.5">
-                {emergencyCutRooms.length} <span className="text-xs text-slate-400 font-normal">phòng</span>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase">Đã tắt nguồn</p>
+              <p className="text-2xl font-black text-slate-400 font-mono mt-0.5">
+                {totalRooms - poweredOnCount} <span className="text-xs text-slate-400 font-normal">phòng</span>
               </p>
             </div>
           </div>
@@ -169,25 +170,25 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
           {/* Mode Selection */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              Chọn phương thức ngắt điện:
+              Chọn thao tác tắt điện:
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Option 1: Emergency Breaker */}
+              {/* Option 1 */}
               <button
                 type="button"
                 onClick={() => setSelectedMode('emergency')}
                 className={`p-3.5 rounded-2xl border text-left transition-all ${
                   selectedMode === 'emergency'
-                    ? 'bg-red-950/60 border-red-500 ring-2 ring-red-500/40 shadow-lg shadow-red-950/50'
+                    ? 'bg-slate-800 border-orange-500 text-white ring-1 ring-orange-500'
                     : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <AlertOctagon className="w-4 h-4 text-red-400" />
-                  <span className="font-bold text-sm text-red-200">Ngắt Khẩn Cấp (Aptomat)</span>
+                  <ZapOff className="w-4 h-4 text-orange-400" />
+                  <span className="font-bold text-sm text-white">Tắt Nguồn Toàn Trường</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Cắt cầu dao khẩn cấp lập tức toàn bộ {totalRooms} phòng học. Khóa an toàn, phát chuông báo động và ghi log đỏ.
+                  Ngắt nguồn điện toàn bộ {totalRooms} phòng học một cách đồng bộ, an toàn và êm ái.
                 </p>
               </button>
 
@@ -197,27 +198,26 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
                 onClick={() => setSelectedMode('soft')}
                 className={`p-3.5 rounded-2xl border text-left transition-all ${
                   selectedMode === 'soft'
-                    ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/40 shadow-lg shadow-amber-950/50'
+                    ? 'bg-slate-800 border-cyan-500 text-white ring-1 ring-cyan-500'
                     : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <PowerOff className="w-4 h-4 text-amber-400" />
-                  <span className="font-bold text-sm text-amber-200">Tắt Nhanh Tiết Kiệm</span>
+                  <PowerOff className="w-4 h-4 text-cyan-400" />
+                  <span className="font-bold text-sm text-white">Tắt Thiết Bị Giải Lao</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Tắt toàn bộ đèn, điều hòa, quạt và máy chiếu ở tất cả các phòng nhưng vẫn duy trì nguồn dự phòng.
+                  Tắt đèn, điều hòa, quạt và máy chiếu ở tất cả các phòng để tiết kiệm điện.
                 </p>
               </button>
             </div>
           </div>
 
-          {/* Warning Message Box */}
-          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-red-200/90 leading-relaxed">
-              <span className="font-bold text-white">Lưu ý an toàn: </span>
-              Lệnh này sẽ được phát qua mạng IoT (MQTT broker) tới toàn bộ các lớp học. Mọi buổi học, thuyết trình hoặc hoạt động đang diễn ra sẽ bị dừng ngay lập tức.
+          {/* Info Message Box */}
+          <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-start gap-3">
+            <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-300 leading-relaxed">
+              Lệnh tắt nguồn sẽ được đồng bộ trực tiếp tới tất cả các phòng học trong cơ sở dữ liệu Supabase.
             </div>
           </div>
 
@@ -227,10 +227,10 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-700 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900"
+              className="w-4 h-4 rounded border-slate-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-slate-900"
             />
             <span className="text-xs font-semibold text-slate-200">
-              Tôi xác nhận thực hiện hành động này đối với toàn bộ các phòng học trong trường
+              Xác nhận tắt điện các phòng học trong trường
             </span>
           </label>
         </div>
@@ -265,20 +265,21 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
 
             <button
               onClick={handleExecuteCut}
-              disabled={!confirmed || isProcessing}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-lg ${
-                confirmed && !isProcessing
-                  ? 'bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white shadow-red-600/30 active:scale-95 cursor-pointer animate-pulse'
+              disabled={!confirmed || isProcessing || !isAdmin}
+              title={!isAdmin ? 'Chỉ Quản trị viên (Admin) mới có quyền thực thi cắt điện toàn trường' : undefined}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-lg ${
+                confirmed && !isProcessing && isAdmin
+                  ? 'bg-orange-500 hover:bg-orange-400 text-slate-950 shadow-orange-500/20 active:scale-95 cursor-pointer'
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
               }`}
             >
               <ZapOff className="w-4 h-4" />
               <span>
-                {isProcessing
-                  ? 'ĐANG NGẮT ĐIỆN...'
-                  : selectedMode === 'emergency'
-                  ? 'XÁC NHẬN CẮT ĐIỆN KHẨN CẤP'
-                  : 'XÁC NHẬN TẮT HẾT THIẾT BỊ'}
+                {!isAdmin
+                  ? 'CHỈ DÀNH CHO ADMIN'
+                  : isProcessing
+                  ? 'ĐANG TẮT ĐIỆN...'
+                  : 'XÁC NHẬN TẮT ĐIỆN TOÀN TRƯỜNG'}
               </span>
             </button>
           </div>

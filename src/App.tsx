@@ -10,9 +10,9 @@ import {
   AlertLog, 
   ScheduleRule, 
   User, 
+  UserRole,
   ThresholdSettings, 
-  ActivityLog,
-  CurtainState
+  ActivityLog
 } from './types';
 import { 
   INITIAL_RULES, 
@@ -37,7 +37,7 @@ import { TimeSyncModal } from './components/TimeSyncModal';
 import { SchoolPowerModal } from './components/SchoolPowerModal';
 import { AddRoomModal } from './components/AddRoomModal';
 import { SqlHelperModal } from './components/SqlHelperModal';
-import { Flame, Bell, X, ShieldAlert, Clock, Zap, Loader2, AlertCircle, RefreshCw, Database, Terminal } from 'lucide-react';
+import { Flame, Bell, X, ShieldAlert, Clock, Zap, Loader2, AlertCircle, RefreshCw, Database, Terminal, Trash2 } from 'lucide-react';
 
 export default function App() {
   // Navigation & Screen State
@@ -49,13 +49,17 @@ export default function App() {
   const [alerts, setAlerts] = useState<AlertLog[]>([]);
   const [rules, setRules] = useState<ScheduleRule[]>(INITIAL_RULES);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<ThresholdSettings>(INITIAL_SETTINGS);
   const [activities, setActivities] = useState<ActivityLog[]>(INITIAL_ACTIVITIES);
 
   // Trạng thái Loading & Lỗi kết nối Supabase
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
+
+  // Trạng thái xóa phòng học
+  const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
+  const [isDeletingRoom, setIsDeletingRoom] = useState<boolean>(false);
 
   // MQTT Connection Info (phục vụ hiển thị tương thích)
   const [mqttStatus, setMqttStatus] = useState(mqttService.getConnectionInfo());
@@ -151,19 +155,23 @@ export default function App() {
       setRooms(fetchedRooms);
       setSupabaseStatus(prev => ({ ...prev, dbRoomCount: fetchedRooms.length }));
 
-      if (fetchedAlerts.length > 0) {
-        setAlerts(fetchedAlerts);
-      }
+      const cleanAlerts = fetchedAlerts.filter(
+        (a) => a.type !== 'power_leak' && !a.message.toLowerCase().includes('ngắt điện')
+      );
+      setAlerts(cleanAlerts);
       if (fetchedSchedules.length > 0) {
         setRules(fetchedSchedules);
       }
       if (fetchedSettings) {
         setSettings(fetchedSettings);
       }
-      if (fetchedProfiles.length > 0) {
-        setUsers(fetchedProfiles);
-        setCurrentUser(fetchedProfiles[0]);
-      }
+      setUsers(fetchedProfiles);
+      // Không tự động đăng nhập khi mới vào web để luôn yêu cầu đăng nhập trước
+      setCurrentUser((prev) => {
+        if (!prev) return null;
+        const matched = fetchedProfiles.find((p) => p.id === prev.id || p.email === prev.email);
+        return matched || null;
+      });
 
       // Khởi tạo activeAlertRoomsRef cho các phòng đang alert
       fetchedRooms.forEach(r => {
@@ -360,23 +368,9 @@ export default function App() {
       ac_mode: updated.devices.ac.mode,
       projector_on: updated.devices.projector.isOn,
       fan_on: updated.devices.fan.isOn,
-      curtain: updated.devices.curtain,
     });
 
     logActivity(`Cập nhật trạng thái thiết bị ${updated.name}`, updated.code, updated.name);
-  };
-
-  // ĐIỀU KHIỂN RÈM CỬA (CẬP NHẬT CỘT curtain VỚI .eq('code', ...))
-  const handleUpdateCurtain = async (roomCode: string, curtain: CurtainState) => {
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.code === roomCode
-          ? { ...r, devices: { ...r.devices, curtain } }
-          : r
-      )
-    );
-    await supabaseService.updateCurtain(roomCode, curtain);
-    logActivity(`Điều khiển rèm ${roomCode}: ${curtain === 'up' ? 'Kéo lên' : curtain === 'down' ? 'Hạ xuống' : 'Dừng'}`, roomCode, `Phòng ${roomCode}`);
   };
 
   // BẬT / TẮT NGUỒN ĐIỆN PHÒNG (CẬP NHẬT CỘT power_on VỚI .eq('code', ...))
@@ -423,10 +417,8 @@ export default function App() {
     if (!target) return;
 
     const powerState = !cutOff;
-    if (cutOff) {
-      if (settings.soundEnabled) soundManager.playAlarm();
-    } else {
-      if (settings.soundEnabled) soundManager.playSwitch(true);
+    if (settings.soundEnabled) {
+      soundManager.playSwitch(powerState);
     }
 
     setRooms((prev) =>
@@ -434,7 +426,7 @@ export default function App() {
         r.code === target.code
           ? {
               ...r,
-              emergencyPowerCut: cutOff,
+              emergencyPowerCut: false,
               isPowerOn: powerState,
               status: powerState ? 'on' : 'off',
               lastUpdated: 'Vừa xong',
@@ -445,33 +437,20 @@ export default function App() {
 
     await supabaseService.updatePower(target.code, powerState);
 
-    if (cutOff) {
-      // Ghi cảnh báo khẩn cấp vào bảng alerts
-      const newAlert = await supabaseService.insertAlert({
-        room_code: target.code,
-        type: 'power_leak',
-        message: `Công tắc khẩn cấp đã ngắt toàn bộ điện phòng ${target.name}!`,
-        level: 'critical',
-      });
-      if (newAlert) {
-        setAlerts((prev) => [newAlert, ...prev]);
-      }
-    }
-
     logActivity(
-      cutOff ? `⚠️ NGẮT ĐIỆN KHẨN CẤP ${target.name}` : `Khôi phục nguồn điện ${target.name}`,
+      cutOff ? `Tắt nguồn điện ${target.name}` : `Bật nguồn điện ${target.name}`,
       target.code,
       target.name
     );
   };
 
-  // TẮT ĐIỆN TOÀN TRƯỜNG
+  // TẮT ĐIỆN TOÀN TRƯỜNG (KHÔNG CẢNH BÁO BÁO ĐỘNG)
   const handleSchoolWidePowerCut = async (mode: 'emergency' | 'soft') => {
     const updatedRooms = rooms.map((r) => ({
       ...r,
       isPowerOn: false,
       status: 'off' as const,
-      emergencyPowerCut: mode === 'emergency',
+      emergencyPowerCut: false,
       devices: {
         ...r.devices,
         light: { ...r.devices.light, isOn: false },
@@ -490,30 +469,16 @@ export default function App() {
     });
 
     if (settings.soundEnabled) {
-      if (mode === 'emergency') soundManager.playEmergencyCut();
-      else soundManager.playSwitch(false);
+      soundManager.playSwitch(false);
     }
 
-    const alertMsg = mode === 'emergency'
-      ? `🚨 CẦU DAO TỔNG: ĐÃ NGẮT ĐIỆN KHẨN CẤP TOÀN TRƯỜNG (${rooms.length} phòng học)!`
-      : `⚠️ ĐÃ TẮT TOÀN BỘ THIẾT BỊ ĐIỆN TOÀN TRƯỜNG (${rooms.length} phòng học)`;
-
-    const newAlert = await supabaseService.insertAlert({
-      room_code: 'ALL',
-      type: 'power_leak',
-      message: alertMsg,
-      level: mode === 'emergency' ? 'critical' : 'warning',
-    });
-    if (newAlert) {
-      setAlerts((prev) => [newAlert, ...prev]);
-    }
-
-    logActivity(alertMsg, 'ALL', 'Toàn trường');
+    const logMsg = `Đã tắt toàn bộ thiết bị điện toàn trường (${rooms.length} phòng học)`;
+    logActivity(logMsg, 'ALL', 'Toàn trường');
     setDbSyncToast({
-      message: `Đã thực thi ngắt điện toàn trường thành công!`,
+      message: `Đã tắt điện toàn trường thành công!`,
       type: 'success',
     });
-    setTimeout(() => setDbSyncToast(null), 4000);
+    setTimeout(() => setDbSyncToast(null), 3000);
   };
 
   // KHÔI PHỤC ĐIỆN TOÀN TRƯỜNG
@@ -564,6 +529,58 @@ export default function App() {
     }
     setIsPushingDb(false);
     setTimeout(() => setDbSyncToast(null), 5000);
+  };
+
+  // XÓA PHÒNG HỌC (XÓA KHỎI UI & DATABASE SUPABASE)
+  const handleRequestDeleteRoom = (roomIdOrCode: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (currentUser?.role !== 'admin') {
+      setDbSyncToast({
+        message: 'Quyền bị từ chối: Chỉ Quản trị viên (Admin) mới có quyền xóa phòng học!',
+        type: 'error',
+      });
+      setTimeout(() => setDbSyncToast(null), 4000);
+      return;
+    }
+    const target = rooms.find((r) => r.code === roomIdOrCode || r.id === roomIdOrCode);
+    if (target) {
+      setRoomToDelete(target);
+    }
+  };
+
+  const handleConfirmDeleteRoom = async () => {
+    if (!roomToDelete) return;
+    const target = roomToDelete;
+    const targetCode = target.code || target.id;
+    const targetName = target.name;
+    setIsDeletingRoom(true);
+
+    // 1. Cập nhật state UI ngay lập tức
+    setRooms((prev) => prev.filter((r) => r.code !== targetCode && r.id !== targetCode));
+    if (selectedRoomId === targetCode || selectedRoomId === target.id) {
+      setSelectedRoomId(null);
+    }
+    setRoomToDelete(null);
+
+    // 2. Gọi Supabase xóa khỏi bảng rooms và alerts
+    const result = await supabaseService.deleteRoom(targetCode);
+    setIsDeletingRoom(false);
+
+    if (result.success) {
+      setDbSyncToast({
+        message: `✓ Đã xóa thành công ${targetName} khỏi Database Supabase!`,
+        type: 'success',
+      });
+      logActivity(`Xóa vĩnh viễn phòng ${targetName} khỏi hệ thống`, targetCode, targetName);
+    } else {
+      setDbSyncToast({
+        message: `Lỗi xóa phòng trên Supabase: ${result.error}`,
+        type: 'error',
+      });
+      // Tải lại dữ liệu nếu xóa thất bại
+      loadAllSupabaseData();
+    }
+    setTimeout(() => setDbSyncToast(null), 4000);
   };
 
   // TẮT ĐIỆN PHÒNG TRỐNG
@@ -709,25 +726,86 @@ export default function App() {
     setTimeout(() => setDbSyncToast(null), 3000);
   };
 
-  // THÊM/SỬA/XÓA USER
-  const handleAddUser = (userData: Omit<User, 'id' | 'createdAt'>) => {
-    const newUser: User = {
-      ...userData,
-      id: `u-${Date.now()}`,
-      createdAt: new Date().toLocaleDateString('vi-VN'),
-    };
-    setUsers((prev) => [...prev, newUser]);
+  // ĐĂNG KÝ VÀ LƯU VÀO DATABASE SUPABASE (BẢNG PROFILES)
+  const handleRegisterUser = async (userData: { full_name: string; email: string; role: UserRole; password?: string }): Promise<User | null> => {
+    const created = await supabaseService.insertProfile({
+      full_name: userData.full_name,
+      role: userData.role,
+      email: userData.email,
+    });
+    if (created) {
+      setUsers((prev) => {
+        const exists = prev.some((u) => u.id === created.id || u.email === created.email);
+        if (exists) return prev.map((u) => (u.id === created.id ? created : u));
+        return [...prev, created];
+      });
+      logActivity(`Tạo tài khoản mới [${created.name}] vai trò [${created.role}] vào Supabase`, 'USER', created.name);
+      return created;
+    }
+    return null;
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
+  // THÊM/SỬA/XÓA USER (ĐỒNG BỘ VÀO BẢNG PROFILES SUPABASE)
+  const handleAddUser = async (userData: Omit<User, 'id' | 'createdAt'>) => {
+    if (currentUser?.role !== 'admin') {
+      setDbSyncToast({ message: 'Chỉ Quản trị viên (Admin) mới có quyền thêm tài khoản!', type: 'error' });
+      return;
+    }
+    const created = await supabaseService.insertProfile({
+      full_name: userData.name,
+      role: userData.role,
+      email: userData.email,
+    });
+    if (created) {
+      setUsers((prev) => [...prev, created]);
+      setDbSyncToast({ message: `Đã thêm tài khoản [${created.name}] vào Database!`, type: 'success' });
+      setTimeout(() => setDbSyncToast(null), 3500);
+      logActivity(`Admin thêm tài khoản [${created.name}]`, 'USER', created.name);
+    }
+  };
+
+  const handleUpdateUser = async (updatedUser: User) => {
+    if (currentUser?.role !== 'admin') {
+      setDbSyncToast({ message: 'Chỉ Quản trị viên (Admin) mới có quyền sửa tài khoản!', type: 'error' });
+      return;
+    }
+    const oldUser = users.find((u) => u.id === updatedUser.id);
+    const isPromoted = oldUser && oldUser.role !== 'admin' && updatedUser.role === 'admin';
+    const isDemoted = oldUser && oldUser.role === 'admin' && updatedUser.role !== 'admin';
+
     setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
     if (currentUser?.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
+    await supabaseService.updateProfile(updatedUser.id, {
+      full_name: updatedUser.name,
+      role: updatedUser.role,
+    });
+
+    const msg = isPromoted
+      ? `✓ Đã cấp quyền Quản trị viên (Admin) cho [${updatedUser.name}] và lưu vào Database!`
+      : isDemoted
+      ? `Đã chuyển vai trò của [${updatedUser.name}] thành Giám thị trong Database!`
+      : `Đã cập nhật tài khoản [${updatedUser.name}] trong Database!`;
+
+    setDbSyncToast({ message: msg, type: 'success' });
+    setTimeout(() => setDbSyncToast(null), 3500);
+    logActivity(`Admin phân quyền cho [${updatedUser.name}]: ${updatedUser.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}`, 'USER', updatedUser.name);
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
+    if (currentUser?.role !== 'admin') {
+      setDbSyncToast({ message: 'Chỉ Quản trị viên (Admin) mới có quyền xóa tài khoản!', type: 'error' });
+      return;
+    }
+    const target = users.find((u) => u.id === userId);
     setUsers((prev) => prev.filter((u) => u.id !== userId));
+    await supabaseService.deleteProfile(userId);
+    setDbSyncToast({ message: `Đã xóa tài khoản khỏi Database!`, type: 'success' });
+    setTimeout(() => setDbSyncToast(null), 3500);
+    if (target) {
+      logActivity(`Admin xóa tài khoản [${target.name}]`, 'USER', target.name);
+    }
   };
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId || r.code === selectedRoomId);
@@ -930,6 +1008,7 @@ export default function App() {
             ) : selectedRoom ? (
               <RoomDetailView
                 room={selectedRoom}
+                currentUser={currentUser}
                 onBack={() => setSelectedRoomId(null)}
                 onUpdateRoom={handleUpdateRoom}
                 onEmergencyCut={handleEmergencyCut}
@@ -939,7 +1018,7 @@ export default function App() {
                 onClearSmokeForRoom={(code) => {
                   supabaseService.setRoomAlert(code, false, true);
                 }}
-                onUpdateCurtain={handleUpdateCurtain}
+                onDeleteRoom={handleRequestDeleteRoom}
                 soundEnabled={settings.soundEnabled}
               />
             ) : (
@@ -966,6 +1045,7 @@ export default function App() {
                 {currentTab === 'rooms' && (
                   <RoomsTab
                     rooms={rooms}
+                    currentUser={currentUser}
                     onSelectRoom={(r) => setSelectedRoomId(r.code || r.id)}
                     onToggleRoomPower={handleToggleRoomPower}
                     onTriggerSmoke={(roomId, e) => {
@@ -978,6 +1058,7 @@ export default function App() {
                     onPushToDatabase={loadAllSupabaseData}
                     onFetchFromDatabase={loadAllSupabaseData}
                     isSyncingDb={isLoading}
+                    onDeleteRoom={handleRequestDeleteRoom}
                   />
                 )}
 
@@ -1044,6 +1125,14 @@ export default function App() {
         isOpen={isAddRoomModalOpen}
         onClose={() => setIsAddRoomModalOpen(false)}
         onAddRoom={async (newRoom) => {
+          if (currentUser?.role !== 'admin') {
+            setDbSyncToast({
+              message: 'Chỉ Quản trị viên (Admin) mới có quyền thêm phòng học mới!',
+              type: 'error',
+            });
+            setTimeout(() => setDbSyncToast(null), 4000);
+            return;
+          }
           await supabaseService.updateRoom(newRoom.id, {
             code: newRoom.id,
             name: newRoom.name,
@@ -1057,7 +1146,6 @@ export default function App() {
             ac_on: false,
             projector_on: false,
             fan_on: false,
-            curtain: 'stop',
           });
           loadAllSupabaseData();
         }}
@@ -1075,9 +1163,60 @@ export default function App() {
         }}
       />
 
-      {/* Login Screen */}
+      {/* Login Screen (Bắt buộc đăng nhập mỗi khi vào web) */}
       {!currentUser && (
-        <LoginModal users={users} onLogin={(u) => setCurrentUser(u)} />
+        <LoginModal 
+          users={users} 
+          onLogin={(u) => setCurrentUser(u)} 
+          onRegisterUser={handleRegisterUser}
+        />
+      )}
+
+      {/* Delete Room Confirmation Modal */}
+      {roomToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md rounded-3xl bg-slate-900 border border-red-500/40 shadow-2xl p-6 text-white space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-white">Xác nhận xóa phòng học</h3>
+                <p className="text-xs text-slate-400">Xóa vĩnh viễn khỏi Database Supabase</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Bạn có chắc chắn muốn xóa phòng <strong className="text-white">{roomToDelete.name} ({roomToDelete.code || roomToDelete.id})</strong>? 
+              Bản ghi phòng học và toàn bộ cảnh báo liên quan sẽ bị xóa trực tiếp khỏi cơ sở dữ liệu Supabase.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setRoomToDelete(null)}
+                disabled={isDeletingRoom}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleConfirmDeleteRoom}
+                disabled={isDeletingRoom}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-red-600/30 disabled:opacity-50"
+              >
+                {isDeletingRoom ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Đang xóa...
+                  </span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xác nhận xóa vĩnh viễn</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

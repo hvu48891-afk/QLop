@@ -15,7 +15,6 @@ import {
   ScheduleRule, 
   User, 
   ThresholdSettings,
-  CurtainState,
   LightPreset,
   AcMode
 } from '../types';
@@ -49,7 +48,6 @@ export const DEFAULT_DB_ROOMS: DbRoom[] = [
     ac_mode: 'cool',
     projector_on: true,
     fan_on: true,
-    curtain: 'up',
     updated_at: new Date().toISOString(),
   },
   {
@@ -69,7 +67,6 @@ export const DEFAULT_DB_ROOMS: DbRoom[] = [
     ac_mode: 'cool',
     projector_on: true,
     fan_on: false,
-    curtain: 'stop',
     updated_at: new Date().toISOString(),
   },
   {
@@ -89,7 +86,6 @@ export const DEFAULT_DB_ROOMS: DbRoom[] = [
     ac_mode: 'cool',
     projector_on: false,
     fan_on: false,
-    curtain: 'down',
     updated_at: new Date().toISOString(),
   },
   {
@@ -109,7 +105,6 @@ export const DEFAULT_DB_ROOMS: DbRoom[] = [
     ac_mode: 'cool',
     projector_on: false,
     fan_on: true,
-    curtain: 'up',
     updated_at: new Date().toISOString(),
   },
   {
@@ -129,7 +124,6 @@ export const DEFAULT_DB_ROOMS: DbRoom[] = [
     ac_mode: 'cool',
     projector_on: true,
     fan_on: true,
-    curtain: 'stop',
     updated_at: new Date().toISOString(),
   },
   {
@@ -149,7 +143,6 @@ export const DEFAULT_DB_ROOMS: DbRoom[] = [
     ac_mode: 'fan',
     projector_on: false,
     fan_on: false,
-    curtain: 'down',
     updated_at: new Date().toISOString(),
   },
 ];
@@ -254,7 +247,6 @@ class SupabaseService {
       ac_mode: fields.ac_mode ?? known?.devices?.ac?.mode ?? defaultRef?.ac_mode ?? 'cool',
       projector_on: fields.projector_on ?? known?.devices?.projector?.isOn ?? defaultRef?.projector_on ?? false,
       fan_on: fields.fan_on ?? known?.devices?.fan?.isOn ?? defaultRef?.fan_on ?? false,
-      curtain: fields.curtain ?? known?.devices?.curtain ?? defaultRef?.curtain ?? 'stop',
       updated_at: new Date().toISOString(),
     };
   }
@@ -323,7 +315,6 @@ class SupabaseService {
           isOn: Boolean(row.fan_on),
           speed: row.fan_on ? 2 : 0,
         },
-        curtain: (row.curtain as CurtainState) || 'stop',
       },
     };
   }
@@ -481,7 +472,6 @@ class SupabaseService {
         ac_mode: r.devices.ac.mode,
         projector_on: r.devices.projector.isOn,
         fan_on: r.devices.fan.isOn,
-        curtain: r.devices.curtain,
         updated_at: new Date().toISOString(),
       }));
 
@@ -664,13 +654,6 @@ class SupabaseService {
   }
 
   /**
-   * Cập nhật điều khiển Rèm: curtain ('up' | 'down' | 'stop')
-   */
-  public async updateCurtain(code: string, curtain: CurtainState): Promise<boolean> {
-    return this.updateRoom(code, { curtain });
-  }
-
-  /**
    * Cập nhật Công tắc Điện phòng / Cắt điện khẩn cấp: power_on
    */
   public async updatePower(code: string, power_on: boolean): Promise<boolean> {
@@ -689,6 +672,60 @@ class SupabaseService {
     return this.updateRoom(code, {
       status: isAlert ? 'alert' : powerOnState ? 'on' : 'off',
     });
+  }
+
+  /**
+   * Xóa phòng học khỏi bảng 'rooms' theo mã 'code'
+   * Đồng thời xóa các bản ghi cảnh báo liên quan trong bảng 'alerts'
+   */
+  public async deleteRoom(code: string): Promise<{ success: boolean; error?: string; rlsError?: boolean }> {
+    try {
+      // 1. Xóa cảnh báo liên quan đến phòng trong bảng alerts
+      try {
+        await supabase.from('alerts').delete().eq('room_code', code);
+      } catch (alertErr) {
+        console.warn(`[Supabase deleteRoom] Không thể xóa alerts phòng ${code}:`, alertErr);
+      }
+
+      // 2. Xóa phòng khỏi bảng rooms
+      const { error } = await supabase
+        .from('rooms')
+        .delete()
+        .eq('code', code);
+
+      if (error) {
+        console.error(`[Supabase deleteRoom] Lỗi xóa phòng ${code}:`, error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        if (isRls) {
+          this.status.rlsRestricted = true;
+          this.status.error = error.message;
+        }
+        this.notifyWriteEvent({
+          table: 'rooms',
+          code,
+          action: 'Xóa phòng ' + code,
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
+        return { success: false, error: error.message, rlsError: isRls };
+      }
+
+      // Xóa khỏi cache nội bộ
+      this.knownRoomsMap.delete(code);
+      this.status.rlsRestricted = false;
+      this.notifyWriteEvent({
+        table: 'rooms',
+        code,
+        action: 'Xóa phòng ' + code,
+        success: true,
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error(`[Supabase deleteRoom] Ngoại lệ khi xóa phòng ${code}:`, err);
+      return { success: false, error: err?.message || 'Lỗi ngoại lệ mạng Supabase' };
+    }
   }
 
   // ==========================================
@@ -930,7 +967,7 @@ class SupabaseService {
   }
 
   // ==========================================
-  // PROFILES: Đọc bảng 'profiles'
+  // PROFILES: Đọc, Thêm, Sửa, Xóa bảng 'profiles'
   // ==========================================
 
   public async fetchProfiles(): Promise<User[]> {
@@ -945,20 +982,215 @@ class SupabaseService {
       }
 
       if (data && data.length > 0) {
-        return data.map((p: DbProfile) => ({
-          id: String(p.id),
-          name: p.full_name || 'Người dùng',
-          email: `${p.full_name?.toLowerCase().replace(/\s+/g, '') || 'user'}@school.edu.vn`,
-          role: p.role === 'admin' ? 'admin' : 'supervisor',
-          avatar: `https://images.unsplash.com/photo-${p.role === 'admin' ? '1534528741775-53994a69daeb' : '1580489944761-15a19d654956'}?w=150&auto=format&fit=crop&q=80`,
-          status: 'active',
-          createdAt: 'Hệ thống',
-        }));
+        return data.map((p: any) => {
+          const cleanName = (p.full_name || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+
+          // Lấy họ và tên tiếng Việt để sinh email chuẩn
+          const words = (p.full_name || '').trim().split(/\s+/);
+          let emailPrefix = cleanName;
+          if (words.length >= 2) {
+            const firstName = words[words.length - 1]
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '');
+            const lastName = words[0]
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '');
+            emailPrefix = `${firstName}.${lastName}`;
+          }
+
+          const defaultMail = `${emailPrefix || 'user'}@school.edu.vn`;
+
+          return {
+            id: String(p.id),
+            name: p.full_name || 'Người dùng',
+            email: p.email || defaultMail,
+            role: p.role === 'admin' ? 'admin' : 'supervisor',
+            avatar: `https://images.unsplash.com/photo-${p.role === 'admin' ? '1534528741775-53994a69daeb' : '1580489944761-15a19d654956'}?w=150&auto=format&fit=crop&q=80`,
+            status: 'active',
+            createdAt: 'Database Supabase',
+          };
+        });
       }
       return [];
     } catch (err) {
       console.error('[Supabase fetchProfiles] Ngoại lệ fetch profiles:', err);
       return [];
+    }
+  }
+
+  /**
+   * Thêm người dùng mới vào bảng 'profiles' và đẩy trực tiếp vào Supabase Database
+   */
+  public async insertProfile(user: { full_name: string; role: 'admin' | 'supervisor'; email?: string; password?: string }): Promise<User | null> {
+    try {
+      const cleanName = (user.full_name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+      const userEmail = user.email || `${cleanName || 'user'}@school.edu.vn`;
+      const userPassword = user.password && user.password.length >= 6 ? user.password : 'School@123456';
+
+      let authUserId: string | null = null;
+
+      // 1. Đăng ký qua Supabase Auth để tạo id hợp lệ trong auth.users
+      try {
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email: userEmail,
+          password: userPassword,
+          options: {
+            data: {
+              full_name: user.full_name,
+              role: user.role,
+            },
+          },
+        });
+
+        if (!authErr && authData.user) {
+          authUserId = authData.user.id;
+        } else if (authErr) {
+          console.warn('[Supabase insertProfile] Supabase Auth signUp note:', authErr.message);
+        }
+      } catch (authEx) {
+        console.warn('[Supabase insertProfile] Auth exception:', authEx);
+      }
+
+      // 2. Chèn / Cập nhật vào bảng public.profiles
+      const targetId = authUserId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'u-' + Date.now());
+
+      const profilePayload = {
+        id: targetId,
+        full_name: user.full_name,
+        role: user.role,
+      };
+
+      // Thử cập nhật trước nếu trigger Auth đã tự tạo dòng trong profiles
+      if (authUserId) {
+        const { data: updatedProfile, error: updateErr } = await supabase
+          .from('profiles')
+          .update({ full_name: user.full_name, role: user.role })
+          .eq('id', authUserId)
+          .select()
+          .maybeSingle();
+
+        if (!updateErr && updatedProfile) {
+          this.notifyWriteEvent({
+            table: 'profiles',
+            action: `Đã lưu tài khoản [${user.full_name}] vào Database Supabase`,
+            success: true,
+          });
+
+          return {
+            id: String(updatedProfile.id),
+            name: updatedProfile.full_name,
+            email: userEmail,
+            role: updatedProfile.role === 'admin' ? 'admin' : 'supervisor',
+            avatar: `https://images.unsplash.com/photo-${updatedProfile.role === 'admin' ? '1534528741775-53994a69daeb' : '1580489944761-15a19d654956'}?w=150&auto=format&fit=crop&q=80`,
+            status: 'active',
+            createdAt: 'Database Supabase',
+          };
+        }
+      }
+
+      // Thử upsert trực tiếp vào bảng profiles
+      const { data: insertedData, error: insertError } = await supabase
+        .from('profiles')
+        .upsert(profilePayload, { onConflict: 'id' })
+        .select()
+        .maybeSingle();
+
+      if (insertError) {
+        console.warn('[Supabase insertProfile] Lỗi upsert profiles:', insertError.message);
+        const isFkOrRls = insertError.code === '23503' || insertError.code === '42501' || insertError.message.toLowerCase().includes('foreign key');
+        this.notifyWriteEvent({
+          table: 'profiles',
+          action: `Lưu tài khoản [${user.full_name}]`,
+          success: false,
+          rlsError: isFkOrRls,
+          error: isFkOrRls ? 'Bảng profiles đang bị chặn bởi khóa ngoại. Bấm "Mở quyền SQL" để chạy lệnh mở khóa!' : insertError.message,
+        });
+      } else {
+        this.notifyWriteEvent({
+          table: 'profiles',
+          action: `Đã lưu tài khoản [${user.full_name}] (${user.role}) vào Database Supabase`,
+          success: true,
+        });
+      }
+
+      const finalId = (insertedData && insertedData.id) || targetId;
+      return {
+        id: String(finalId),
+        name: (insertedData && insertedData.full_name) || user.full_name,
+        email: userEmail,
+        role: user.role,
+        avatar: `https://images.unsplash.com/photo-${user.role === 'admin' ? '1534528741775-53994a69daeb' : '1580489944761-15a19d654956'}?w=150&auto=format&fit=crop&q=80`,
+        status: 'active',
+        createdAt: 'Database Supabase',
+      };
+    } catch (err: any) {
+      console.error('[Supabase insertProfile] Ngoại lệ:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Cập nhật thông tin profile trong bảng 'profiles'
+   */
+  public async updateProfile(id: string, updates: { full_name?: string; role?: 'admin' | 'supervisor' }): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) {
+        console.error('[Supabase updateProfile] Lỗi cập nhật profile:', error.message);
+        return false;
+      }
+      this.notifyWriteEvent({
+        table: 'profiles',
+        action: `Cập nhật thông tin tài khoản (id: ${id.slice(0, 8)}...)`,
+        success: true,
+      });
+      return true;
+    } catch (err) {
+      console.error('[Supabase updateProfile] Ngoại lệ update profile:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Xóa profile khỏi bảng 'profiles'
+   */
+  public async deleteProfile(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('[Supabase deleteProfile] Lỗi xóa profile:', error.message);
+        return false;
+      }
+      this.notifyWriteEvent({
+        table: 'profiles',
+        action: `Xóa tài khoản khỏi Database (id: ${id.slice(0, 8)}...)`,
+        success: true,
+      });
+      return true;
+    } catch (err) {
+      console.error('[Supabase deleteProfile] Ngoại lệ delete profile:', err);
+      return false;
     }
   }
 

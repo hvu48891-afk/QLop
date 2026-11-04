@@ -42,7 +42,7 @@ export interface RoomDevices {
     isOn: boolean;
     speed: number; // 1 - 4
   };
-  curtain: CurtainState;
+  curtain?: CurtainState;
 }
 
 export interface Room {
@@ -84,7 +84,7 @@ export interface DbRoom {
   ac_mode: 'cool' | 'fan';
   projector_on: boolean;
   fan_on: boolean;
-  curtain: 'up' | 'down' | 'stop';
+  curtain?: 'up' | 'down' | 'stop';
   updated_at: string;
 }
 

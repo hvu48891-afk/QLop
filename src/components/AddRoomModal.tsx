@@ -83,7 +83,6 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
           isOn: isPowerOn,
           speed: isPowerOn ? 2 : 0,
         },
-        curtain: 'stop',
       },
     };
 
