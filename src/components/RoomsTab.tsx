@@ -137,25 +137,16 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {onOpenAddRoomModal && (
-            isAdmin ? (
-              <button
-                onClick={onOpenAddRoomModal}
-                title="Thêm phòng học mới vào hệ thống (Quản trị viên)"
-                className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Thêm phòng học</span>
-              </button>
-            ) : (
-              <div
-                title="Chỉ Quản trị viên (Admin) mới có quyền thêm phòng học mới"
-                className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed select-none"
-              >
-                <Plus className="w-3.5 h-3.5 opacity-40" />
-                <span>Thêm phòng (Chỉ Admin)</span>
-              </div>
-            )
+          {/* Chỉ hiển thị nút Thêm phòng học cho tài khoản Quản trị viên (Admin) */}
+          {isAdmin && onOpenAddRoomModal && (
+            <button
+              onClick={onOpenAddRoomModal}
+              title="Thêm phòng học mới vào hệ thống (Chỉ Quản trị viên)"
+              className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Thêm phòng học</span>
+            </button>
           )}
 
           {onPushToDatabase && (
@@ -181,10 +172,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             </button>
           )}
 
-          {onPurgeNonDbRooms && (
+          {/* Chỉ hiển thị nút Xóa phòng ngoài DB cho Quản trị viên (Admin) */}
+          {isAdmin && onPurgeNonDbRooms && (
             <button
               onClick={onPurgeNonDbRooms}
-              title="Xóa tất cả các phòng không có trong Database Supabase"
+              title="Xóa tất cả các phòng không có trong Database Supabase (Chỉ Quản trị viên)"
               className="flex-1 md:flex-none px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-red-950/40 text-red-400 hover:text-red-300 border border-red-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
             >
               <Trash2 className="w-3.5 h-3.5" />

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Plus, Building2, Layers, Users, Zap, Check } from 'lucide-react';
+import { X, Plus, Building2, Layers, Users, Zap, Check, ShieldAlert } from 'lucide-react';
 import { Room } from '../types';
 
 interface AddRoomModalProps {
@@ -12,6 +12,7 @@ interface AddRoomModalProps {
   onClose: () => void;
   onAddRoom: (newRoom: Room) => void;
   existingRoomIds: string[];
+  isAdmin?: boolean;
 }
 
 export const AddRoomModal: React.FC<AddRoomModalProps> = ({
@@ -19,6 +20,7 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
   onClose,
   onAddRoom,
   existingRoomIds,
+  isAdmin = true,
 }) => {
   const [roomId, setRoomId] = useState('');
   const [roomName, setRoomName] = useState('');
@@ -30,8 +32,34 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
 
   if (!isOpen) return null;
 
+  if (!isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div className="relative w-full max-w-md rounded-3xl bg-slate-900 border border-red-500/40 shadow-2xl p-6 text-white text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <h3 className="font-bold text-lg text-white">Quyền bị từ chối</h3>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Chỉ tài khoản Quản trị viên (Admin) mới có quyền tạo thêm phòng học mới vào hệ thống.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      setError('Chỉ Quản trị viên (Admin) mới có quyền thêm phòng học!');
+      return;
+    }
     const cleanId = roomId.trim().toUpperCase();
     if (!cleanId) {
       setError('Vui lòng nhập mã phòng (VD: A301, B202, 401...)');

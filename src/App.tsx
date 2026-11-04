@@ -156,7 +156,7 @@ export default function App() {
       setSupabaseStatus(prev => ({ ...prev, dbRoomCount: fetchedRooms.length }));
 
       const cleanAlerts = fetchedAlerts.filter(
-        (a) => a.type !== 'power_leak' && !a.message.toLowerCase().includes('ngắt điện')
+        (a) => !a.message.toLowerCase().includes('phòng này đã ngắt điện')
       );
       setAlerts(cleanAlerts);
       if (fetchedSchedules.length > 0) {
@@ -444,13 +444,14 @@ export default function App() {
     );
   };
 
-  // TẮT ĐIỆN TOÀN TRƯỜNG (KHÔNG CẢNH BÁO BÁO ĐỘNG)
+  // CẮT / TẮT ĐIỆN TOÀN TRƯỜNG
   const handleSchoolWidePowerCut = async (mode: 'emergency' | 'soft') => {
+    const isEmergency = mode === 'emergency';
     const updatedRooms = rooms.map((r) => ({
       ...r,
       isPowerOn: false,
       status: 'off' as const,
-      emergencyPowerCut: false,
+      emergencyPowerCut: isEmergency,
       devices: {
         ...r.devices,
         light: { ...r.devices.light, isOn: false },
@@ -468,17 +469,35 @@ export default function App() {
       supabaseService.updatePower(r.code, false);
     });
 
-    if (settings.soundEnabled) {
-      soundManager.playSwitch(false);
+    if (isEmergency) {
+      if (settings.soundEnabled) {
+        soundManager.playEmergencyCut();
+      }
+      const newAlert = await supabaseService.insertAlert({
+        room_code: 'ALL',
+        type: 'power_leak',
+        message: `🚨 [CẦU DAO TỔNG] Đã ngắt điện khẩn cấp toàn trường (${rooms.length} phòng học) bởi ${currentUser?.name || 'Giám thị'}!`,
+        level: 'critical',
+      });
+      if (newAlert) {
+        setAlerts((prev) => [newAlert, ...prev]);
+      }
+      logActivity(`🚨 CẮT ĐIỆN KHẨN CẤP TOÀN TRƯỜNG (${rooms.length} phòng học)`, 'ALL', 'Toàn trường');
+      setDbSyncToast({
+        message: `ĐÃ CẮT ĐIỆN KHẨN CẤP TOÀN BỘ ${rooms.length} PHÒNG HỌC!`,
+        type: 'error',
+      });
+    } else {
+      if (settings.soundEnabled) {
+        soundManager.playSwitch(false);
+      }
+      logActivity(`Đã tắt toàn bộ thiết bị điện toàn trường (${rooms.length} phòng học) - Giờ nghỉ`, 'ALL', 'Toàn trường');
+      setDbSyncToast({
+        message: `Đã tắt thiết bị điện toàn trường thành công!`,
+        type: 'success',
+      });
     }
-
-    const logMsg = `Đã tắt toàn bộ thiết bị điện toàn trường (${rooms.length} phòng học)`;
-    logActivity(logMsg, 'ALL', 'Toàn trường');
-    setDbSyncToast({
-      message: `Đã tắt điện toàn trường thành công!`,
-      type: 'success',
-    });
-    setTimeout(() => setDbSyncToast(null), 3000);
+    setTimeout(() => setDbSyncToast(null), 4000);
   };
 
   // KHÔI PHỤC ĐIỆN TOÀN TRƯỜNG
@@ -550,6 +569,15 @@ export default function App() {
 
   const handleConfirmDeleteRoom = async () => {
     if (!roomToDelete) return;
+    if (currentUser?.role !== 'admin') {
+      setDbSyncToast({
+        message: 'Quyền bị từ chối: Chỉ Quản trị viên (Admin) mới có quyền xóa phòng học!',
+        type: 'error',
+      });
+      setTimeout(() => setDbSyncToast(null), 4000);
+      setRoomToDelete(null);
+      return;
+    }
     const target = roomToDelete;
     const targetCode = target.code || target.id;
     const targetName = target.name;
@@ -624,6 +652,94 @@ export default function App() {
           : a
       )
     );
+  };
+
+  // TEST KÍCH HOẠT CẢNH BÁO BÁO KHÓI / SỰ CỐ
+  const handleTriggerRandomSmokeAlarm = async () => {
+    const targetRoom = rooms.find((r) => r.code === 'A201') || rooms[0];
+    if (!targetRoom) return;
+
+    await supabaseService.setRoomAlert(targetRoom.code, true, true);
+
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.code === targetRoom.code
+          ? {
+              ...r,
+              status: 'alert',
+              hasFireAlarm: true,
+              smokeLevel: 420,
+              temperature: 38.5,
+              lastUpdated: 'Vừa xong',
+            }
+          : r
+      )
+    );
+
+    const alertMsg = `[TEST CẢNH BÁO] Cảm biến khói phát hiện nồng độ vượt ngưỡng tại ${targetRoom.name} (420 ppm)!`;
+    const newAlert = await supabaseService.insertAlert({
+      room_code: targetRoom.code,
+      type: 'smoke',
+      message: alertMsg,
+      level: 'critical',
+    });
+
+    if (newAlert) {
+      setAlerts((prev) => [newAlert, ...prev]);
+    }
+
+    if (settings.soundEnabled) {
+      soundManager.playAlarm();
+    }
+
+    logActivity(`🚨 Test kích hoạt cảnh báo khói tại ${targetRoom.name}`, targetRoom.code, targetRoom.name);
+    setDbSyncToast({
+      message: `Đã kích hoạt thử nghiệm cảnh báo khói tại ${targetRoom.name}!`,
+      type: 'info',
+    });
+    setTimeout(() => setDbSyncToast(null), 3500);
+  };
+
+  // TẮT TẤT CẢ CÁC CẢNH BÁO / ĐẶT LẠI CẢM BIẾN AN TOÀN
+  const handleClearAllAlarms = async () => {
+    for (const r of rooms) {
+      if (r.status === 'alert' || r.hasFireAlarm || r.smokeLevel >= settings.smokeThreshold) {
+        await supabaseService.setRoomAlert(r.code, false, r.isPowerOn);
+      }
+    }
+
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.status === 'alert' || r.hasFireAlarm
+          ? {
+              ...r,
+              status: r.isPowerOn ? 'on' : 'off',
+              hasFireAlarm: false,
+              smokeLevel: 25,
+              temperature: Math.min(r.temperature, 26),
+              lastUpdated: 'Vừa xong',
+            }
+          : r
+      )
+    );
+
+    const nowTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    setAlerts((prev) =>
+      prev.map((a) => (a.isResolved ? a : { ...a, isResolved: true, resolvedAt: nowTime }))
+    );
+
+    activeAlertRoomsRef.current.clear();
+
+    if (settings.soundEnabled) {
+      soundManager.playSwitch(true);
+    }
+
+    logActivity('✓ Đã tắt còi và đặt lại toàn bộ cảnh báo về trạng thái an toàn', 'ALL', 'Toàn trường');
+    setDbSyncToast({
+      message: 'Đã đặt lại toàn bộ hệ thống cảm biến về trạng thái an toàn!',
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 3000);
   };
 
   // QUY TẮC LẬP LỊCH: BẬT/TẮT, THÊM, SỬA, XÓA TRONG BẢNG 'schedules'
@@ -905,6 +1021,45 @@ export default function App() {
         </div>
       )}
 
+      {/* CẢNH BÁO KHẨN CẤP AN TOÀN (BÁO CHÁY / KHÓI / QUÁ NHIỆT) */}
+      {activeCriticalRoom && (
+        <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-lg bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 border-2 border-red-400 animate-bounce">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-white/20 animate-spin shrink-0">
+              <Flame className="w-6 h-6 text-yellow-300" />
+            </div>
+            <div>
+              <p className="font-black text-sm uppercase tracking-wide flex items-center gap-2">
+                <span>🚨 CẢNH BÁO AN TOÀN KHẨN CẤP!</span>
+              </p>
+              <p className="text-xs text-white/95 font-bold">
+                Phát hiện sự cố tại {activeCriticalRoom.name} (Khói: {activeCriticalRoom.smokeLevel} ppm, Nhiệt độ: {activeCriticalRoom.temperature}°C)
+              </p>
+              <p className="text-[11px] text-red-100 mt-0.5">
+                Cảm biến vượt ngưỡng an toàn. Vui lòng kiểm tra hiện trường hoặc tắt còi nếu là thử nghiệm.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5 shrink-0">
+            <button
+              onClick={() => setSelectedRoomId(activeCriticalRoom.code || activeCriticalRoom.id)}
+              className="px-3 py-1.5 bg-white text-red-700 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors shadow active:scale-95 whitespace-nowrap"
+            >
+              Xem phòng
+            </button>
+            <button
+              onClick={() => {
+                supabaseService.setRoomAlert(activeCriticalRoom.code, false, activeCriticalRoom.isPowerOn);
+                activeAlertRoomsRef.current.delete(activeCriticalRoom.code);
+              }}
+              className="px-3 py-1 bg-red-800/90 hover:bg-red-900 text-white rounded-xl text-[11px] font-semibold transition-colors active:scale-95 whitespace-nowrap"
+            >
+              Tắt còi
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 min-h-screen">
         {/* Navigation Sidebar / Mobile Nav */}
         <Navbar
@@ -926,14 +1081,8 @@ export default function App() {
             allUsers={users}
             onSwitchUser={(u) => setCurrentUser(u)}
             onLogout={() => setCurrentUser(null)}
-            onTriggerRandomSmokeAlarm={() => {}}
-            onClearAllAlarms={() => {
-              rooms.forEach(r => {
-                if (r.status === 'alert') {
-                  supabaseService.setRoomAlert(r.code, false, r.isPowerOn);
-                }
-              });
-            }}
+            onTriggerRandomSmokeAlarm={handleTriggerRandomSmokeAlarm}
+            onClearAllAlarms={handleClearAllAlarms}
             activeAlarmCount={activeAlarmCount}
             mqttStatus={mqttStatus}
             supabaseStatus={supabaseStatus}
@@ -1018,7 +1167,7 @@ export default function App() {
                 onClearSmokeForRoom={(code) => {
                   supabaseService.setRoomAlert(code, false, true);
                 }}
-                onDeleteRoom={handleRequestDeleteRoom}
+                onDeleteRoom={currentUser?.role === 'admin' ? handleRequestDeleteRoom : undefined}
                 soundEnabled={settings.soundEnabled}
               />
             ) : (
@@ -1033,7 +1182,7 @@ export default function App() {
                     onNavigateToRooms={() => setCurrentTab('rooms')}
                     onTurnOffEmptyRooms={handleTurnOffEmptyRooms}
                     onResolveAlert={handleResolveAlert}
-                    onTriggerRandomSmokeAlarm={() => {}}
+                    onTriggerRandomSmokeAlarm={handleTriggerRandomSmokeAlarm}
                     onPushToDatabase={loadAllSupabaseData}
                     isPushingDb={isPushingDb}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
@@ -1053,12 +1202,12 @@ export default function App() {
                       supabaseService.setRoomAlert(roomId, true, true);
                     }}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
-                    onOpenAddRoomModal={() => setIsAddRoomModalOpen(true)}
+                    onOpenAddRoomModal={currentUser?.role === 'admin' ? () => setIsAddRoomModalOpen(true) : undefined}
                     dbRoomCount={rooms.length}
                     onPushToDatabase={loadAllSupabaseData}
                     onFetchFromDatabase={loadAllSupabaseData}
                     isSyncingDb={isLoading}
-                    onDeleteRoom={handleRequestDeleteRoom}
+                    onDeleteRoom={currentUser?.role === 'admin' ? handleRequestDeleteRoom : undefined}
                   />
                 )}
 
@@ -1123,6 +1272,7 @@ export default function App() {
       {/* Add Room Modal */}
       <AddRoomModal
         isOpen={isAddRoomModalOpen}
+        isAdmin={currentUser?.role === 'admin'}
         onClose={() => setIsAddRoomModalOpen(false)}
         onAddRoom={async (newRoom) => {
           if (currentUser?.role !== 'admin') {

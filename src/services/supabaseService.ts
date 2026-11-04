@@ -290,7 +290,7 @@ class SupabaseService {
       smokeLevel: Number(row.smoke_level) || 0,
       temperature: Number(row.temperature) || 0,
       humidity: Number(row.humidity) || 0,
-      emergencyPowerCut: !isPower && status === 'off',
+      emergencyPowerCut: false,
       lastUpdated: isDisconnected ? 'Mất kết nối (>30s)' : 'Trực tuyến (Realtime)',
       updatedAt: row.updated_at || new Date().toISOString(),
       isDisconnected,

@@ -833,10 +833,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         {room.isPowerOn ? (
           <button
             onClick={() => onEmergencyCut(room.id, true)}
-            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs tracking-wide shadow-md active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-red-600/25 active:scale-95 transition-all uppercase flex items-center justify-center gap-2"
           >
-            <Power className="w-4 h-4 text-slate-400" />
-            <span>TẮT ĐIỆN PHÒNG</span>
+            <Power className="w-4 h-4 text-white" />
+            <span>NGẮT ĐIỆN PHÒNG</span>
           </button>
         ) : (
           <button

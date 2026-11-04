@@ -170,25 +170,25 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
           {/* Mode Selection */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              Chọn thao tác tắt điện:
+              Chọn thao tác cắt / tắt điện:
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Option 1 */}
+              {/* Option 1: Emergency Breaker */}
               <button
                 type="button"
                 onClick={() => setSelectedMode('emergency')}
                 className={`p-3.5 rounded-2xl border text-left transition-all ${
                   selectedMode === 'emergency'
-                    ? 'bg-slate-800 border-orange-500 text-white ring-1 ring-orange-500'
+                    ? 'bg-red-950/70 border-red-500 text-white ring-1 ring-red-500 shadow-lg shadow-red-500/10'
                     : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
-                  <ZapOff className="w-4 h-4 text-orange-400" />
-                  <span className="font-bold text-sm text-white">Tắt Nguồn Toàn Trường</span>
+                  <AlertOctagon className="w-4 h-4 text-red-400" />
+                  <span className="font-bold text-sm text-red-200">Cắt Khẩn Cấp (Aptomat)</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Ngắt nguồn điện toàn bộ {totalRooms} phòng học một cách đồng bộ, an toàn và êm ái.
+                  Ngắt tức thời toàn bộ nguồn điện của tất cả các phòng học khi có sự cố chập điện hoặc báo cháy khẩn cấp.
                 </p>
               </button>
 
@@ -198,28 +198,37 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
                 onClick={() => setSelectedMode('soft')}
                 className={`p-3.5 rounded-2xl border text-left transition-all ${
                   selectedMode === 'soft'
-                    ? 'bg-slate-800 border-cyan-500 text-white ring-1 ring-cyan-500'
+                    ? 'bg-slate-800 border-cyan-500 text-white ring-1 ring-cyan-500 shadow-lg shadow-cyan-500/10'
                     : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <PowerOff className="w-4 h-4 text-cyan-400" />
-                  <span className="font-bold text-sm text-white">Tắt Thiết Bị Giải Lao</span>
+                  <span className="font-bold text-sm text-white">Tắt Giờ Nghỉ (Tiết Kiệm)</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Tắt đèn, điều hòa, quạt và máy chiếu ở tất cả các phòng để tiết kiệm điện.
+                  Tắt đèn, điều hòa, quạt và máy chiếu ở tất cả các phòng để tiết kiệm điện sau giờ học.
                 </p>
               </button>
             </div>
           </div>
 
-          {/* Info Message Box */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-start gap-3">
-            <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-slate-300 leading-relaxed">
-              Lệnh tắt nguồn sẽ được đồng bộ trực tiếp tới tất cả các phòng học trong cơ sở dữ liệu Supabase.
+          {/* Warning / Info Message Box */}
+          {selectedMode === 'emergency' ? (
+            <div className="p-3.5 rounded-2xl bg-red-950/50 border border-red-500/40 flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-red-200 leading-relaxed">
+                <strong className="text-white">CẢNH BÁO KHẨN CẤP:</strong> Cắt Aptomat tổng sẽ ngắt điện tức thì cho toàn bộ {totalRooms} phòng học và kích hoạt âm thanh cảnh báo sự cố toàn trường.
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-start gap-3">
+              <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 leading-relaxed">
+                Lệnh tắt nguồn sẽ được đồng bộ trực tiếp tới tất cả các phòng học trong cơ sở dữ liệu Supabase.
+              </div>
+            </div>
+          )}
 
           {/* Confirmation Checkbox */}
           <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 cursor-pointer select-none transition-colors">
@@ -227,10 +236,10 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-slate-900"
+              className="w-4 h-4 rounded border-slate-700 text-red-500 focus:ring-red-500 focus:ring-offset-slate-900"
             />
             <span className="text-xs font-semibold text-slate-200">
-              Xác nhận tắt điện các phòng học trong trường
+              Tôi xác nhận thực thi lệnh {selectedMode === 'emergency' ? 'CẮT ĐIỆN KHẨN CẤP' : 'tắt điện'} cho toàn trường
             </span>
           </label>
         </div>
@@ -269,7 +278,9 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
               title={!isAdmin ? 'Chỉ Quản trị viên (Admin) mới có quyền thực thi cắt điện toàn trường' : undefined}
               className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-lg ${
                 confirmed && !isProcessing && isAdmin
-                  ? 'bg-orange-500 hover:bg-orange-400 text-slate-950 shadow-orange-500/20 active:scale-95 cursor-pointer'
+                  ? selectedMode === 'emergency'
+                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30 active:scale-95 cursor-pointer'
+                    : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20 active:scale-95 cursor-pointer'
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
               }`}
             >
@@ -278,8 +289,10 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
                 {!isAdmin
                   ? 'CHỈ DÀNH CHO ADMIN'
                   : isProcessing
-                  ? 'ĐANG TẮT ĐIỆN...'
-                  : 'XÁC NHẬN TẮT ĐIỆN TOÀN TRƯỜNG'}
+                  ? 'ĐANG THỰC HIỆN...'
+                  : selectedMode === 'emergency'
+                  ? 'XÁC NHẬN CẮT ĐIỆN KHẨN CẤP'
+                  : 'XÁC NHẬN TẮT ĐIỆN GIỜ NGHỈ'}
               </span>
             </button>
           </div>

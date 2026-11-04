@@ -196,15 +196,15 @@ export const Header: React.FC<HeaderProps> = ({
             title="Mở bảng điều khiển cắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
               poweredOnCount > 0
-                ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200'
+                ? 'bg-red-950/40 hover:bg-red-900/60 border-red-500/40 text-red-200 shadow-sm'
                 : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-slate-500'
             }`}
           >
-            <ZapOff className={`w-3.5 h-3.5 ${poweredOnCount > 0 ? 'text-amber-400' : 'text-slate-500'}`} />
-            <span className="hidden sm:inline">Tắt điện toàn trường</span>
-            <span className="sm:hidden">Tắt điện</span>
+            <ZapOff className={`w-3.5 h-3.5 ${poweredOnCount > 0 ? 'text-red-400' : 'text-slate-500'}`} />
+            <span className="hidden sm:inline">Cầu dao tổng trường</span>
+            <span className="sm:hidden">Cầu dao</span>
             {poweredOnCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300 ml-0.5">
+              <span className="px-1.5 py-0.2 rounded-full bg-red-900/80 border border-red-500/40 text-[10px] font-bold text-red-200 ml-0.5">
                 {poweredOnCount}
               </span>
             )}
