@@ -29,7 +29,6 @@ interface HeaderProps {
   allUsers: User[];
   onSwitchUser: (user: User) => void;
   onLogout: () => void;
-  onTriggerRandomSmokeAlarm: () => void;
   onClearAllAlarms: () => void;
   activeAlarmCount: number;
   mqttStatus: { status: string; latency: number };
@@ -49,7 +48,6 @@ export const Header: React.FC<HeaderProps> = ({
   allUsers,
   onSwitchUser,
   onLogout,
-  onTriggerRandomSmokeAlarm,
   onClearAllAlarms,
   activeAlarmCount,
   mqttStatus,
@@ -135,23 +133,16 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Realtime Clock & Sync Button */}
         <button
           onClick={onOpenTimeSyncModal}
-          title="Nhấn để đồng bộ giờ chuẩn NTP hoặc mô phỏng tua thời gian kiểm tra quy tắc"
+          title="Đồng bộ giờ chuẩn NTP từ máy chủ thời gian thực"
           className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 rounded-xl text-right transition-all group active:scale-95"
         >
           <Clock className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
           <div className="flex flex-col items-end">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-mono font-bold text-orange-400">
-                {timeInfo ? timeInfo.currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : currentTime}
-              </span>
-              {timeInfo?.isSimulated && (
-                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/40">
-                  {timeInfo.speedMultiplier}x
-                </span>
-              )}
-            </div>
+            <span className="text-xs font-mono font-bold text-orange-400">
+              {timeInfo ? timeInfo.currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : currentTime}
+            </span>
             <span className="text-[10px] text-slate-400 leading-none group-hover:text-orange-300 transition-colors">
-              {timeInfo?.isSimulated ? 'Đang mô phỏng' : 'Đồng bộ giờ NTP'}
+              Giờ NTP Realtime
             </span>
           </div>
         </button>
@@ -181,28 +172,17 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Quick Simulation Trigger Buttons */}
-        <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+        {/* Active Alarms Reset Button (chỉ hiển thị khi có sự cố thực tế) */}
+        {activeAlarmCount > 0 && (
           <button
-            onClick={onTriggerRandomSmokeAlarm}
-            title="Kích hoạt cảm biến khói ngẫu nhiên để kiểm tra giao diện cảnh báo đỏ nhấp nháy"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 active:scale-95 transition-all text-xs font-medium"
+            onClick={onClearAllAlarms}
+            title="Đặt lại và tắt toàn bộ còi báo động về an toàn"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white border border-red-400/50 text-xs font-bold transition-all active:scale-95 animate-bounce shadow-md shadow-red-600/30"
           >
-            <Flame className="w-3.5 h-3.5 text-red-400 animate-pulse" />
-            <span className="hidden md:inline">Test</span> Báo khói
+            <ShieldCheck className="w-3.5 h-3.5 text-white" />
+            <span>Tắt còi báo động ({activeAlarmCount})</span>
           </button>
-
-          {activeAlarmCount > 0 && (
-            <button
-              onClick={onClearAllAlarms}
-              title="Đặt lại cảm biến khói về ngưỡng an toàn"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 active:scale-95 transition-all text-xs font-medium"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">Tắt</span> Báo động
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Master School-wide Power Cut Button */}
         {onOpenSchoolPowerModal && (

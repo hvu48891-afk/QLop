@@ -19,7 +19,8 @@ export type LightPreset = 'study' | 'presentation' | 'exam' | 'off';
 export type AcMode = 'cool' | 'fan';
 export type AcFanSpeed = 'low' | 'med' | 'high';
 export type ProjectorInput = 'hdmi' | 'airplay' | 'typec';
-export type CurtainState = 'up' | 'down' | 'stop';
+export type CurtainState = 'open' | 'close' | 'stop';
+export type AirQualityState = 'tot' | 'trung_binh' | 'kem' | string;
 
 export interface RoomDevices {
   light: {
@@ -59,6 +60,10 @@ export interface Room {
   smokeLevel: number; // ppm (0 - 1000)
   temperature: number; // °C
   humidity: number; // %
+  curtain: CurtainState; // 'open' | 'close' | 'stop' (từ cột curtain)
+  airQuality: AirQualityState; // 'tot' | 'trung_binh' | 'kem' (từ cột air_quality)
+  flame: boolean; // Cảm biến lửa (từ cột flame)
+  relayAlarm: boolean; // Relay còi báo động (từ cột relay_alarm)
   devices: RoomDevices;
   emergencyPowerCut: boolean;
   lastUpdated: string;
@@ -66,7 +71,7 @@ export interface Room {
   isDisconnected?: boolean; // Nếu updated_at cũ hơn 30 giây
 }
 
-// Supabase Database Row Types (Khớp chính xác cấu trúc database thực tế)
+// Supabase Database Row Types (Khớp 100% chính xác cấu trúc bảng rooms thực tế)
 export interface DbRoom {
   id: number | string;
   code: string; // e.g. 'A201'
@@ -84,8 +89,27 @@ export interface DbRoom {
   ac_mode: 'cool' | 'fan';
   projector_on: boolean;
   fan_on: boolean;
-  curtain?: 'up' | 'down' | 'stop';
+  curtain?: 'open' | 'close' | 'stop';
+  air_quality?: 'tot' | 'trung_binh' | 'kem' | string;
+  flame?: boolean;
+  relay_alarm?: boolean;
   updated_at: string;
+}
+
+// Supabase Database Row Types (Khớp 100% chính xác cấu trúc bảng sensor_data thực tế từ mạch IoT)
+export interface DbSensorData {
+  id: number;
+  created_at: string;
+  room_code: string;
+  gas: number;
+  clkk: 'kem' | 'tot' | 'trung_binh' | string;
+  nhiet_do: number;
+  do_am: number;
+  lua: 'Co' | 'Ko co' | string;
+  relay1_den: boolean;
+  relay2_quat: boolean;
+  relay3_maychieu: boolean;
+  relay4_dieuhoa: boolean;
 }
 
 export interface DbAlert {

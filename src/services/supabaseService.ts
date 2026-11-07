@@ -7,6 +7,7 @@ import { supabase, SUPABASE_URL } from '../lib/supabase';
 import { 
   Room, 
   DbRoom, 
+  DbSensorData,
   DbAlert, 
   DbSchedule, 
   DbSettings, 
@@ -32,117 +33,26 @@ export interface SupabaseStatus {
 
 export const DEFAULT_DB_ROOMS: DbRoom[] = [
   {
-    id: 1,
+    id: '81747db3-421a-4f0e-80e8-2020e472ecf6',
     code: 'A201',
-    name: 'Phòng học A201 (Mạch thật)',
+    name: 'Phòng học A201',
     building: 'A',
-    status: 'on',
-    temperature: 24.5,
-    humidity: 58,
-    smoke_level: 42,
-    power_on: true,
-    light_on: true,
-    light_mode: 'study',
-    ac_on: true,
+    status: 'off',
+    temperature: 27.5,
+    humidity: 83,
+    smoke_level: 0,
+    power_on: false,
+    light_on: false,
+    light_mode: 'off',
+    ac_on: false,
     ac_temp: 24,
     ac_mode: 'cool',
-    projector_on: true,
-    fan_on: true,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    code: '301',
-    name: 'Phòng học 301',
-    building: 'A',
-    status: 'on',
-    temperature: 25.2,
-    humidity: 61,
-    smoke_level: 38,
-    power_on: true,
-    light_on: true,
-    light_mode: 'presentation',
-    ac_on: true,
-    ac_temp: 25,
-    ac_mode: 'cool',
-    projector_on: true,
-    fan_on: false,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    code: '302',
-    name: 'Phòng học 302',
-    building: 'A',
-    status: 'off',
-    temperature: 28.0,
-    humidity: 65,
-    smoke_level: 25,
-    power_on: false,
-    light_on: false,
-    light_mode: 'off',
-    ac_on: false,
-    ac_temp: 26,
-    ac_mode: 'cool',
     projector_on: false,
     fan_on: false,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 4,
-    code: '303',
-    name: 'Phòng học 303',
-    building: 'A',
-    status: 'on',
-    temperature: 31.8,
-    humidity: 70,
-    smoke_level: 55,
-    power_on: true,
-    light_on: true,
-    light_mode: 'study',
-    ac_on: true,
-    ac_temp: 22,
-    ac_mode: 'cool',
-    projector_on: false,
-    fan_on: true,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 5,
-    code: 'B101',
-    name: 'Hội trường B101',
-    building: 'B',
-    status: 'on',
-    temperature: 23.5,
-    humidity: 55,
-    smoke_level: 60,
-    power_on: true,
-    light_on: true,
-    light_mode: 'presentation',
-    ac_on: true,
-    ac_temp: 22,
-    ac_mode: 'cool',
-    projector_on: true,
-    fan_on: true,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 6,
-    code: 'B102',
-    name: 'Phòng học B102',
-    building: 'B',
-    status: 'off',
-    temperature: 28.5,
-    humidity: 68,
-    smoke_level: 22,
-    power_on: false,
-    light_on: false,
-    light_mode: 'off',
-    ac_on: false,
-    ac_temp: 26,
-    ac_mode: 'fan',
-    projector_on: false,
-    fan_on: false,
+    curtain: 'stop',
+    air_quality: 'kem',
+    flame: false,
+    relay_alarm: false,
     updated_at: new Date().toISOString(),
   },
 ];
@@ -257,8 +167,9 @@ class SupabaseService {
   public mapDbRoomToRoom(row: DbRoom): Room {
     const code = row.code || 'A201';
     const isPower = Boolean(row.power_on);
+    const isFlame = Boolean(row.flame);
     const status = row.status || (isPower ? 'on' : 'off');
-    const isAlert = status === 'alert' || (Number(row.smoke_level) || 0) >= 350;
+    const isAlert = status === 'alert' || isFlame || (Number(row.smoke_level) || 0) >= 350;
     
     // Tách tầng từ mã phòng (VD: A201 -> 2, B102 -> 1, 301 -> 3)
     const digits = code.replace(/\D/g, '');
@@ -279,7 +190,7 @@ class SupabaseService {
     return {
       id: code,
       code,
-      name: row.name || (code === 'A201' ? 'Phòng học A201 (Mạch thật)' : `Phòng học ${code}`),
+      name: row.name || (code === 'A201' ? 'Phòng học A201' : `Phòng học ${code}`),
       building: buildingLabel,
       floor: floor || 1,
       capacity: 45,
@@ -290,6 +201,10 @@ class SupabaseService {
       smokeLevel: Number(row.smoke_level) || 0,
       temperature: Number(row.temperature) || 0,
       humidity: Number(row.humidity) || 0,
+      curtain: (row.curtain as any) || 'stop',
+      airQuality: row.air_quality || 'tot',
+      flame: isFlame,
+      relayAlarm: Boolean(row.relay_alarm),
       emergencyPowerCut: false,
       lastUpdated: isDisconnected ? 'Mất kết nối (>30s)' : 'Trực tuyến (Realtime)',
       updatedAt: row.updated_at || new Date().toISOString(),
@@ -404,7 +319,7 @@ class SupabaseService {
   // ==========================================
 
   /**
-   * Tải toàn bộ phòng học từ bảng 'rooms'
+   * Tải toàn bộ phòng học từ bảng 'rooms' và đồng bộ với bảng 'sensor_data'
    */
   public async fetchRooms(): Promise<Room[]> {
     try {
@@ -419,35 +334,112 @@ class SupabaseService {
         return DEFAULT_DB_ROOMS.map((row) => this.mapDbRoomToRoom(row));
       }
 
+      let roomsList: Room[] = [];
       if (data && data.length > 0) {
         this.status.dbRoomCount = data.length;
         this.status.rlsRestricted = false;
-        return data.map((row: DbRoom) => this.mapDbRoomToRoom(row));
+        roomsList = data.map((row: DbRoom) => this.mapDbRoomToRoom(row));
+      } else {
+        roomsList = DEFAULT_DB_ROOMS.map((row) => this.mapDbRoomToRoom(row));
       }
 
-      // Nếu Supabase trả về 0 phòng (hoặc do bảng rỗng / RLS chưa mở policy)
-      // Thử đẩy danh sách phòng mẫu vào bảng Supabase
+      // Nạp kèm dữ liệu cảm biến mới nhất từ bảng sensor_data
       try {
-        const { error: seedError } = await supabase.from('rooms').upsert(DEFAULT_DB_ROOMS, { onConflict: 'code' });
-        if (!seedError) {
-          const { data: reloaded } = await supabase.from('rooms').select('*').order('code', { ascending: true });
-          if (reloaded && reloaded.length > 0) {
-            this.status.dbRoomCount = reloaded.length;
-            this.status.rlsRestricted = false;
-            return reloaded.map((row: DbRoom) => this.mapDbRoomToRoom(row));
-          }
-        } else {
-          console.warn('[Supabase fetchRooms] Table rooms đang có RLS policy:', seedError.message);
-          this.status.rlsRestricted = true;
+        const latestSensors = await this.fetchRecentSensorData(20);
+        if (latestSensors && latestSensors.length > 0) {
+          roomsList = roomsList.map((room) => {
+            const matchedSensor = latestSensors.find((s) => s.room_code === room.code);
+            return matchedSensor ? this.mergeSensorDataToRoom(room, matchedSensor) : room;
+          });
         }
-      } catch {}
+      } catch (sensorErr) {
+        console.warn('[Supabase fetchRooms] Không đọc được sensor_data:', sensorErr);
+      }
 
-      this.status.dbRoomCount = DEFAULT_DB_ROOMS.length;
-      return DEFAULT_DB_ROOMS.map((row) => this.mapDbRoomToRoom(row));
+      return roomsList;
     } catch (err: any) {
       console.error('[Supabase fetchRooms] Thất bại khi đọc bảng rooms:', err);
       return DEFAULT_DB_ROOMS.map((row) => this.mapDbRoomToRoom(row));
     }
+  }
+
+  /**
+   * Đọc danh sách bản ghi mới nhất từ bảng sensor_data (dữ liệu thật từ mạch cảm biến)
+   */
+  public async fetchRecentSensorData(limit: number = 20): Promise<DbSensorData[]> {
+    try {
+      const { data, error } = await supabase
+        .from('sensor_data')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('[Supabase fetchRecentSensorData] Lỗi đọc sensor_data:', error.message);
+        return [];
+      }
+      return (data as DbSensorData[]) || [];
+    } catch (err) {
+      console.error('[Supabase fetchRecentSensorData] Ngoại lệ:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Cập nhật thông số phòng học từ bản ghi sensor_data thời gian thực
+   */
+  public mergeSensorDataToRoom(room: Room, sensor: DbSensorData): Room {
+    const luaStr = String(sensor.lua || '').trim().toLowerCase();
+    const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
+    const gasVal = Number(sensor.gas) || 0;
+    const isAlert = isFlame || gasVal > 25;
+
+    return {
+      ...room,
+      temperature: Number(sensor.nhiet_do) || room.temperature,
+      humidity: Number(sensor.do_am) || room.humidity,
+      smokeLevel: gasVal,
+      airQuality: sensor.clkk || room.airQuality,
+      flame: isFlame,
+      status: isAlert ? 'alert' : room.isPowerOn ? 'on' : 'off',
+      hasFireAlarm: isAlert,
+      updatedAt: sensor.created_at || new Date().toISOString(),
+      lastUpdated: 'Trực tuyến (Sensor)',
+      isDisconnected: false,
+      devices: {
+        ...room.devices,
+        light: {
+          ...room.devices.light,
+          isOn: Boolean(sensor.relay1_den),
+        },
+        fan: {
+          ...room.devices.fan,
+          isOn: Boolean(sensor.relay2_quat),
+        },
+        projector: {
+          ...room.devices.projector,
+          isOn: Boolean(sensor.relay3_maychieu),
+        },
+        ac: {
+          ...room.devices.ac,
+          isOn: Boolean(sensor.relay4_dieuhoa),
+        },
+      },
+    };
+  }
+
+  /**
+   * Điều khiển Rèm cửa thông minh (cột curtain trong bảng rooms)
+   */
+  public async updateCurtain(code: string, curtain: 'open' | 'close' | 'stop'): Promise<boolean> {
+    return this.updateRoom(code, { curtain } as any);
+  }
+
+  /**
+   * Điều khiển Relay còi báo động (cột relay_alarm trong bảng rooms)
+   */
+  public async updateRelayAlarm(code: string, relay_alarm: boolean): Promise<boolean> {
+    return this.updateRoom(code, { relay_alarm } as any);
   }
 
   /**
@@ -1223,9 +1215,13 @@ class SupabaseService {
   /**
    * Thiết lập Realtime Channel cho bảng 'rooms' và 'alerts'
    */
+  /**
+   * Thiết lập Realtime Channel cho bảng 'rooms', 'sensor_data' và 'alerts'
+   */
   public subscribeRealtime(
     onRoomChange: (updatedRoom: Room) => void,
-    onAlertChange: (newAlert: AlertLog) => void
+    onAlertChange: (newAlert: AlertLog) => void,
+    onSensorDataChange?: (sensor: DbSensorData) => void
   ) {
     try {
       const channel = supabase
@@ -1242,11 +1238,26 @@ class SupabaseService {
         )
         .on(
           'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'sensor_data' },
+          (payload) => {
+            if (payload.new) {
+              const sensor = payload.new as DbSensorData;
+              onSensorDataChange?.(sensor);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'alerts' },
           (payload) => {
             if (payload.new) {
               const mappedAlert = this.mapDbAlertToAlert(payload.new as DbAlert);
-              onAlertChange(mappedAlert);
+              const msgLower = (mappedAlert.message || '').toLowerCase();
+              if (!msgLower.includes('phòng này đã ngắt điện') &&
+                  !msgLower.includes('[test') &&
+                  !msgLower.includes('test cảnh báo')) {
+                onAlertChange(mappedAlert);
+              }
             }
           }
         )

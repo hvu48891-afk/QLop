@@ -12,7 +12,8 @@ import {
   User, 
   UserRole,
   ThresholdSettings, 
-  ActivityLog
+  ActivityLog,
+  DbSensorData
 } from './types';
 import { 
   INITIAL_RULES, 
@@ -54,6 +55,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<ThresholdSettings>(INITIAL_SETTINGS);
   const [activities, setActivities] = useState<ActivityLog[]>(INITIAL_ACTIVITIES);
+  const [recentSensorLogs, setRecentSensorLogs] = useState<DbSensorData[]>([]);
 
   // Trạng thái Loading & Lỗi kết nối Supabase
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -152,19 +154,24 @@ export default function App() {
       setSupabaseStatus(status);
 
       // Tải song song các bảng dữ liệu
-      const [fetchedRooms, fetchedAlerts, fetchedSchedules, fetchedSettings, fetchedProfiles] = await Promise.all([
+      const [fetchedRooms, fetchedAlerts, fetchedSchedules, fetchedSettings, fetchedProfiles, fetchedSensors] = await Promise.all([
         supabaseService.fetchRooms(),
         supabaseService.fetchAlerts(),
         supabaseService.fetchSchedules(),
         supabaseService.fetchSettings(),
         supabaseService.fetchProfiles(),
+        supabaseService.fetchRecentSensorData(25),
       ]);
 
       setRooms(fetchedRooms);
       setSupabaseStatus(prev => ({ ...prev, dbRoomCount: fetchedRooms.length }));
+      setRecentSensorLogs(fetchedSensors || []);
 
       const cleanAlerts = fetchedAlerts.filter(
-        (a) => !a.message.toLowerCase().includes('phòng này đã ngắt điện')
+        (a) => !a.message.toLowerCase().includes('phòng này đã ngắt điện') &&
+               !a.message.toLowerCase().includes('cảm biến khói phát hiện nồng độ vượt ngưỡng (25 ppm') &&
+               !a.message.toLowerCase().includes('[test') &&
+               !a.message.toLowerCase().includes('test cảnh báo')
       );
       setAlerts(cleanAlerts);
       if (fetchedSchedules.length > 0) {
@@ -174,12 +181,15 @@ export default function App() {
         setSettings(fetchedSettings);
       }
       setUsers(fetchedProfiles);
-      // Không tự động đăng nhập khi mới vào web để luôn yêu cầu đăng nhập trước
-      setCurrentUser((prev) => {
-        if (!prev) return null;
-        const matched = fetchedProfiles.find((p) => p.id === prev.id || p.email === prev.email);
-        return matched || null;
-      });
+
+      // Phục hồi phiên đăng nhập nếu đã lưu, hoặc tự động chọn nếu chỉ có 1 profile
+      const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('smart_classroom_user_id') : null;
+      if (savedUserId) {
+        const matched = fetchedProfiles.find((p) => p.id === savedUserId);
+        if (matched) setCurrentUser(matched);
+      } else if (fetchedProfiles.length === 1) {
+        setCurrentUser(fetchedProfiles[0]);
+      }
 
       // Khởi tạo activeAlertRoomsRef cho các phòng đang alert
       fetchedRooms.forEach(r => {
@@ -222,11 +232,65 @@ export default function App() {
       },
       (newAlert: AlertLog) => {
         setAlerts((prev) => {
-          if (prev.some((a) => a.id === newAlert.id)) return prev;
+          if (prev.some((a) => a.id === newAlert.id || a.message === newAlert.message)) return prev;
           return [newAlert, ...prev];
         });
         if (settingsRef.current.soundEnabled) {
           soundManager.playAlarm();
+        }
+      },
+      (sensorData) => {
+        // Lưu vào danh sách telemetry logs gần nhất (bảng sensor_data)
+        setRecentSensorLogs((prev) => [sensorData, ...prev.filter((s) => s.id !== sensorData.id)].slice(0, 25));
+
+        // Cập nhật tức thì dữ liệu cảm biến thực tế từ bảng sensor_data
+        setRooms((prev) => {
+          return prev.map((r) => {
+            if (r.code === sensorData.room_code || (!sensorData.room_code && r.code === 'A201')) {
+              return supabaseService.mergeSensorDataToRoom(r, sensorData);
+            }
+            return r;
+          });
+        });
+
+        // Chỉ tạo cảnh báo thực tế khi cảm biến trong bảng sensor_data phát hiện Lửa hoặc Khí gas
+        const luaStr = String(sensorData.lua || '').trim().toLowerCase();
+        const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
+        const gasVal = Number(sensorData.gas) || 0;
+        if (isFlame) {
+          const flameAlert: AlertLog = {
+            id: `sensor-flame-${sensorData.id}`,
+            roomId: sensorData.room_code || 'A201',
+            roomName: `Phòng ${sensorData.room_code || 'A201'}`,
+            building: 'Tòa A',
+            type: 'fire',
+            message: `Phát hiện lửa tại phòng ${sensorData.room_code || 'A201'}`,
+            severity: 'critical',
+            timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            isResolved: false,
+            createdAt: sensorData.created_at,
+          };
+          setAlerts((prev) => [flameAlert, ...prev.filter((a) => a.id !== flameAlert.id)]);
+          if (settingsRef.current.soundEnabled) {
+            soundManager.playFireSiren();
+          }
+        } else if (gasVal > 15) {
+          const gasAlert: AlertLog = {
+            id: `sensor-gas-${sensorData.id}`,
+            roomId: sensorData.room_code || 'A201',
+            roomName: `Phòng ${sensorData.room_code || 'A201'}`,
+            building: 'Tòa A',
+            type: 'gas',
+            message: `Khí gas phòng ${sensorData.room_code || 'A201'} vượt ngưỡng: ${gasVal}%`,
+            severity: 'critical',
+            timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+            isResolved: false,
+            createdAt: sensorData.created_at,
+          };
+          setAlerts((prev) => [gasAlert, ...prev.filter((a) => a.id !== gasAlert.id)]);
+          if (settingsRef.current.soundEnabled) {
+            soundManager.playAlarm();
+          }
         }
       }
     );
@@ -262,53 +326,6 @@ export default function App() {
 
     return () => clearInterval(connectionChecker);
   }, []);
-
-  // 4. CẢNH BÁO TỰ ĐỘNG THEO NGƯỠNG (Khi smoke_level >= smoke_threshold hoặc temp >= temp_threshold)
-  useEffect(() => {
-    rooms.forEach((room) => {
-      const isExceeded = 
-        room.smokeLevel >= settings.smokeThreshold || 
-        room.temperature >= settings.highTempThreshold;
-
-      if (isExceeded) {
-        if (!activeAlertRoomsRef.current.has(room.code)) {
-          activeAlertRoomsRef.current.add(room.code);
-          // 1. Cập nhật status = 'alert' cho phòng đó trong bảng rooms
-          supabaseService.setRoomAlert(room.code, true, room.isPowerOn);
-          
-          // 2. Thêm một dòng vào bảng alerts (chỉ thêm khi vừa vượt ngưỡng)
-          const alertType = room.smokeLevel >= settings.smokeThreshold ? 'smoke' : 'temp_high';
-          const alertMsg = room.smokeLevel >= settings.smokeThreshold
-            ? `Cảm biến khói phát hiện nồng độ vượt ngưỡng (${room.smokeLevel} ppm >= ${settings.smokeThreshold} ppm)!`
-            : `Cảm biến nhiệt độ phòng tăng cao (${room.temperature}°C >= ${settings.highTempThreshold}°C)!`;
-          
-          supabaseService.insertAlert({
-            room_code: room.code,
-            type: alertType,
-            message: alertMsg,
-            level: 'critical',
-          }).then((newAlert) => {
-            if (newAlert) {
-              setAlerts((prev) => [newAlert, ...prev]);
-            }
-          });
-
-          if (settings.soundEnabled) {
-            soundManager.playAlarm();
-          }
-
-          logActivity(`⚠️ Kích hoạt cảnh báo tự động tại ${room.name}`, room.code, room.name);
-        }
-      } else {
-        // Khi giá trị về dưới ngưỡng: trả status về 'on' (nếu power_on) hoặc 'off'
-        if (activeAlertRoomsRef.current.has(room.code)) {
-          activeAlertRoomsRef.current.delete(room.code);
-          supabaseService.setRoomAlert(room.code, false, room.isPowerOn);
-          logActivity(`Trạng thái phòng ${room.name} đã trở về an toàn`, room.code, room.name);
-        }
-      }
-    });
-  }, [rooms, settings.smokeThreshold, settings.highTempThreshold]);
 
   // 5. ĐỒNG BỘ THỜI GIAN THẬT & TỰ ĐỘNG HÓA LẬP LỊCH
   useEffect(() => {
@@ -660,52 +677,6 @@ export default function App() {
           : a
       )
     );
-  };
-
-  // TEST KÍCH HOẠT CẢNH BÁO BÁO KHÓI / SỰ CỐ
-  const handleTriggerRandomSmokeAlarm = async () => {
-    const targetRoom = rooms.find((r) => r.code === 'A201') || rooms[0];
-    if (!targetRoom) return;
-
-    await supabaseService.setRoomAlert(targetRoom.code, true, true);
-
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.code === targetRoom.code
-          ? {
-              ...r,
-              status: 'alert',
-              hasFireAlarm: true,
-              smokeLevel: 420,
-              temperature: 38.5,
-              lastUpdated: 'Vừa xong',
-            }
-          : r
-      )
-    );
-
-    const alertMsg = `[TEST CẢNH BÁO] Cảm biến khói phát hiện nồng độ vượt ngưỡng tại ${targetRoom.name} (420 ppm)!`;
-    const newAlert = await supabaseService.insertAlert({
-      room_code: targetRoom.code,
-      type: 'smoke',
-      message: alertMsg,
-      level: 'critical',
-    });
-
-    if (newAlert) {
-      setAlerts((prev) => [newAlert, ...prev]);
-    }
-
-    if (settings.soundEnabled) {
-      soundManager.playAlarm();
-    }
-
-    logActivity(`🚨 Test kích hoạt cảnh báo khói tại ${targetRoom.name}`, targetRoom.code, targetRoom.name);
-    setDbSyncToast({
-      message: `Đã kích hoạt thử nghiệm cảnh báo khói tại ${targetRoom.name}!`,
-      type: 'info',
-    });
-    setTimeout(() => setDbSyncToast(null), 3500);
   };
 
   // TẮT TẤT CẢ CÁC CẢNH BÁO / ĐẶT LẠI CẢM BIẾN AN TOÀN
@@ -1157,9 +1128,14 @@ export default function App() {
             currentTab={currentTab}
             currentUser={currentUser}
             allUsers={users}
-            onSwitchUser={(u) => setCurrentUser(u)}
-            onLogout={() => setCurrentUser(null)}
-            onTriggerRandomSmokeAlarm={handleTriggerRandomSmokeAlarm}
+            onSwitchUser={(u) => {
+              setCurrentUser(u);
+              localStorage.setItem('smart_classroom_user_id', u.id);
+            }}
+            onLogout={() => {
+              setCurrentUser(null);
+              localStorage.removeItem('smart_classroom_user_id');
+            }}
             onClearAllAlarms={handleClearAllAlarms}
             activeAlarmCount={activeAlarmCount}
             mqttStatus={mqttStatus}
@@ -1257,11 +1233,11 @@ export default function App() {
                     rooms={rooms}
                     alerts={alerts}
                     activities={activities}
+                    recentSensorLogs={recentSensorLogs}
                     onSelectRoom={(r) => setSelectedRoomId(r.code || r.id)}
                     onNavigateToRooms={() => setCurrentTab('rooms')}
                     onTurnOffEmptyRooms={handleTurnOffEmptyRooms}
                     onResolveAlert={handleResolveAlert}
-                    onTriggerRandomSmokeAlarm={handleTriggerRandomSmokeAlarm}
                     onPushToDatabase={loadAllSupabaseData}
                     isPushingDb={isPushingDb}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
@@ -1411,11 +1387,16 @@ export default function App() {
         onResetDefault={handleResetDefaultTheme}
       />
 
-      {/* Login Screen (Bắt buộc đăng nhập mỗi khi vào web) */}
+      {/* Login Screen (Bắt buộc đăng nhập mỗi khi vào web nếu chưa có session) */}
       {!currentUser && (
         <LoginModal 
           users={users} 
-          onLogin={(u) => setCurrentUser(u)} 
+          onLogin={(u) => {
+            setCurrentUser(u);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('smart_classroom_user_id', u.id);
+            }
+          }} 
           onRegisterUser={handleRegisterUser}
         />
       )}

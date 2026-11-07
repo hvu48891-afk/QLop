@@ -210,12 +210,7 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
               Đồng hồ hiện tại: <strong className="text-orange-400 font-mono">
                 {timeInfo ? timeInfo.currentTime.toLocaleTimeString('vi-VN') : 'Đang đồng bộ...'}
               </strong>
-              {timeInfo?.isSimulated && (
-                <span className="text-amber-400 ml-1.5 font-semibold">
-                  (Mô phỏng tốc độ {timeInfo.speedMultiplier}x)
-                </span>
-              )}
-              {' '}• Tự động kích hoạt khi đúng giờ hẹn
+              {' '}• Tự động kích hoạt khi đúng giờ hẹn (Realtime 100%)
             </p>
           </div>
         </div>
@@ -226,7 +221,7 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors active:scale-95 whitespace-nowrap self-stretch sm:self-auto justify-center"
           >
             <Repeat className="w-3.5 h-3.5 text-orange-400" />
-            <span>Đồng bộ giờ & Thử nghiệm tự động</span>
+            <span>Đồng bộ thời gian chuẩn NTP</span>
           </button>
         )}
       </div>
@@ -296,15 +291,15 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
                     </div>
                   </div>
 
-                  {/* Right Actions: Toggle switch + Test button + Edit/Delete */}
+                  {/* Right Actions: Toggle switch + Execute button + Edit/Delete */}
                   <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-3 sm:pt-0 border-t sm:border-0 border-slate-800/80">
                     <button
                       onClick={() => onTriggerRuleNow(rule)}
-                      title="Chạy thử quy tắc ngay lập tức"
+                      title="Kích hoạt thực thi quy tắc ngay lập tức"
                       className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1 transition-colors active:scale-95"
                     >
                       <Play className="w-3 h-3 text-orange-400 fill-orange-400" />
-                      <span className="hidden md:inline">Chạy thử</span>
+                      <span className="hidden md:inline">Thực thi ngay</span>
                     </button>
 
                     <button

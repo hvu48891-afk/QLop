@@ -40,13 +40,10 @@ class TimeSyncService {
   }
 
   /**
-   * Lấy thời gian hiện tại đã được đồng bộ chuẩn và áp dụng tốc độ mô phỏng
+   * Lấy thời gian thực tế chuẩn xác đã được đồng bộ với máy chủ NTP/Supabase
    */
   public getCurrentTime(): Date {
-    if (this.isSimulated && this.simulationBaseTime) {
-      const elapsedMs = (Date.now() - this.simulationStartLocal) * this.speedMultiplier;
-      return new Date(this.simulationBaseTime.getTime() + elapsedMs);
-    }
+    // Luôn lấy thời gian thực tế, không dùng mô phỏng
     return new Date(Date.now() + this.offsetMs);
   }
 
@@ -124,29 +121,11 @@ class TimeSyncService {
   }
 
   /**
-   * Đặt giờ mô phỏng (Time Travel) để kiểm tra các rule hẹn giờ (Ví dụ 17:29 để xem 17:30 tự động tắt điện)
+   * Tính năng mô phỏng đã bị tắt theo yêu cầu (Chỉ sử dụng thời gian thực tế)
    */
-  public setSimulationTime(targetTimeStr: string, speedMultiplier: number = 1): TimeSyncInfo {
-    // targetTimeStr: "HH:mm" hoặc "HH:mm:ss"
-    const now = this.getCurrentTime();
-    const parts = targetTimeStr.split(':');
-    const hours = parseInt(parts[0], 10) || 0;
-    const minutes = parseInt(parts[1], 10) || 0;
-    const seconds = parseInt(parts[2], 10) || 0;
-
-    const simDate = new Date(now);
-    simDate.setHours(hours, minutes, seconds, 0);
-
-    this.simulationBaseTime = simDate;
-    this.simulationStartLocal = Date.now();
-    this.isSimulated = true;
-    this.speedMultiplier = Math.max(1, Math.min(60, speedMultiplier));
-    this.source = 'simulation';
-    this.sourceName = `Mô phỏng kiểm tra quy tắc (${this.speedMultiplier}x)`;
-
-    const info = this.getTimeInfo();
-    this.notifyListeners(info);
-    return info;
+  public setSimulationTime(_targetTimeStr: string, _speedMultiplier: number = 1): TimeSyncInfo {
+    // Khóa tính năng mô phỏng: luôn giữ thời gian thực tế
+    return this.resetToRealTime();
   }
 
   /**

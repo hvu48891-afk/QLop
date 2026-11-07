@@ -193,19 +193,49 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
             <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800 text-left flex items-start gap-2.5">
               <Database className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
               <div className="text-[11px] text-slate-400 leading-relaxed">
-                <span className="font-semibold text-slate-300">Xác thực qua Database Supabase: </span>
-                Hệ thống chỉ cho phép các tài khoản có trong cơ sở dữ liệu đăng nhập.
-                {users.length > 0 ? (
-                  <span className="block text-slate-400 mt-1">
-                    Database đang có <strong className="text-white">{users.length}</strong> tài khoản: {users.map(u => u.name).join(', ')}.
-                  </span>
-                ) : (
-                  <span className="block text-amber-300 mt-1">
-                    Database hiện chưa có tài khoản nào. Hãy chuyển sang tab <strong>"Thêm tài khoản DB"</strong> để đăng ký tài khoản của bạn!
-                  </span>
-                )}
+                <span className="font-semibold text-slate-300">Xác thực trực tiếp từ Database Supabase: </span>
+                Hệ thống kết nối trực tiếp với bảng <code className="text-cyan-300 font-mono">profiles</code>. Bạn có thể chọn nhanh tài khoản bên dưới để đăng nhập ngay:
               </div>
             </div>
+
+            {/* Quick 1-Click Login from Database Profiles */}
+            {users.length > 0 && (
+              <div className="space-y-2 text-left">
+                <label className="block text-slate-300 font-bold text-xs">
+                  Tài khoản trong Database ({users.length}):
+                </label>
+                <div className="space-y-2">
+                  {users.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => onLogin(u)}
+                      className="w-full p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-orange-500/60 hover:bg-slate-900/80 flex items-center justify-between transition-all group active:scale-[0.98] shadow-md"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={u.avatar} 
+                          alt={u.name} 
+                          className="w-9 h-9 rounded-xl object-cover ring-1 ring-orange-500/40" 
+                        />
+                        <div>
+                          <p className="font-bold text-white text-xs group-hover:text-orange-400 transition-colors capitalize">
+                            {u.name}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {u.role === 'admin' ? 'Quản trị viên (Toàn quyền hệ thống)' : 'Giám thị (Giám sát & Điều khiển)'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1.5 rounded-xl bg-orange-500/20 group-hover:bg-orange-500 text-orange-400 group-hover:text-slate-950 text-xs font-bold transition-all flex items-center gap-1.5">
+                        <span>Vào ngay</span>
+                        <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Error banner */}
             {loginError && (
@@ -215,8 +245,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
               </div>
             )}
 
-            {/* Regular Form */}
-            <form onSubmit={handleLoginSubmit} className="space-y-3.5 text-left text-xs">
+            {/* Manual Form */}
+            <form onSubmit={handleLoginSubmit} className="space-y-3.5 text-left text-xs pt-2 border-t border-slate-800/80">
+              <div className="text-[11px] text-slate-400 font-medium">Hoặc nhập thủ công thông tin tài khoản:</div>
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Email hoặc Tên tài khoản Database</label>
                 <div className="relative">
@@ -238,7 +269,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
                   <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="•••••••• (Tùy chọn)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-orange-500 font-mono"
@@ -248,10 +279,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
 
               <button
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-sm tracking-wide shadow-xl shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+                className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs tracking-wide active:scale-95 transition-all flex items-center justify-center gap-2 mt-3"
               >
-                <span>ĐĂNG NHẬP VÀO HỆ THỐNG</span>
-                <ArrowRight className="w-4 h-4 stroke-[3]" />
+                <span>XÁC NHẬN ĐĂNG NHẬP THỦ CÔNG</span>
+                <ArrowRight className="w-4 h-4 stroke-[2]" />
               </button>
             </form>
           </div>

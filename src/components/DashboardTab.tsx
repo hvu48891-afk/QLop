@@ -22,19 +22,24 @@ import {
   Database,
   UploadCloud,
   Check,
-  ZapOff
+  ZapOff,
+  Wind,
+  Radio,
+  Thermometer,
+  Droplets,
+  Cpu
 } from 'lucide-react';
-import { Room, AlertLog, ActivityLog } from '../types';
+import { Room, AlertLog, ActivityLog, DbSensorData } from '../types';
 
 interface DashboardTabProps {
   rooms: Room[];
   alerts: AlertLog[];
   activities: ActivityLog[];
+  recentSensorLogs?: DbSensorData[];
   onSelectRoom: (room: Room) => void;
   onNavigateToRooms: () => void;
   onTurnOffEmptyRooms: () => void;
   onResolveAlert: (alertId: string) => void;
-  onTriggerRandomSmokeAlarm: () => void;
   onPushToDatabase?: () => Promise<void> | void;
   isPushingDb?: boolean;
   onOpenSchoolPowerModal?: () => void;
@@ -45,11 +50,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   rooms,
   alerts,
   activities,
+  recentSensorLogs = [],
   onSelectRoom,
   onNavigateToRooms,
   onTurnOffEmptyRooms,
   onResolveAlert,
-  onTriggerRandomSmokeAlarm,
   onPushToDatabase,
   isPushingDb,
   onOpenSchoolPowerModal,
@@ -257,7 +262,156 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </div>
 
-      {/* ================= 2. CANH BAO MOI NHAT (ALERT LOGS) ================= */}
+      {/* ================= 2. BẢNG DỮ LIỆU CẢM BIẾN REALTIME (BẢNG sensor_data SUPABASE) ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+              <Cpu className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-white text-base">Dữ liệu Cảm biến Realtime</h3>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-mono text-cyan-300">
+                  <Database className="w-3 h-3 text-cyan-400" />
+                  <span>bảng sensor_data</span>
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Luồng dữ liệu vật lý gửi liên tục từ mạch ESP32 vào cơ sở dữ liệu Supabase (~3s/gói tin)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+              <span>Đang nhận trực tiếp</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Sensor Data Stream Table */}
+        <div className="overflow-x-auto rounded-2xl border border-slate-800/80">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-950/90 text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-800">
+                <th className="py-2.5 px-3">Gói #ID</th>
+                <th className="py-2.5 px-3">Thời gian ghi</th>
+                <th className="py-2.5 px-3">Phòng</th>
+                <th className="py-2.5 px-3">Nhiệt độ</th>
+                <th className="py-2.5 px-3">Độ ẩm</th>
+                <th className="py-2.5 px-3">Khí Gas</th>
+                <th className="py-2.5 px-3">Cảm biến Lửa</th>
+                <th className="py-2.5 px-3">Chất lượng KK (CLKK)</th>
+                <th className="py-2.5 px-3">Trạng thái 4 Rơ-le</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 font-mono">
+              {recentSensorLogs.length > 0 ? (
+                recentSensorLogs.slice(0, 8).map((log, idx) => {
+                  const luaStr = String(log.lua || '').trim().toLowerCase();
+                  const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
+                  const gasVal = Number(log.gas) || 0;
+                  const timeFormatted = log.created_at
+                    ? new Date(log.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                    : 'Vừa xong';
+
+                  return (
+                    <tr
+                      key={log.id || idx}
+                      className={`hover:bg-slate-800/40 transition-colors ${
+                        idx === 0 ? 'bg-cyan-500/5' : ''
+                      }`}
+                    >
+                      <td className="py-2.5 px-3 text-cyan-400 font-bold">
+                        #{log.id}
+                        {idx === 0 && (
+                          <span className="ml-1 text-[9px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-sans uppercase">
+                            Mới
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-300">
+                        {timeFormatted}
+                      </td>
+                      <td className="py-2.5 px-3 font-sans font-bold text-white">
+                        {log.room_code || 'A201'}
+                      </td>
+                      <td className="py-2.5 px-3 text-amber-300 font-bold">
+                        {Number(log.nhiet_do).toFixed(1)}°C
+                      </td>
+                      <td className="py-2.5 px-3 text-blue-300 font-bold">
+                        {log.do_am}%
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] ${
+                          gasVal > 15 ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'text-slate-300'
+                        }`}>
+                          {gasVal} ppm
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-sans">
+                        {isFlame ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] animate-bounce shadow">
+                            <Flame className="w-3 h-3 fill-yellow-300" />
+                            <span>CÓ LỬA!</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Ko có</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 font-sans text-xs text-slate-300">
+                        <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
+                          {log.clkk || 'Bình thường'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-sans">
+                        <div className="flex items-center gap-1.5 text-[10px]">
+                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                            log.relay1_den ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
+                          }`}>
+                            Đèn: {log.relay1_den ? 'Bật' : 'Tắt'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                            log.relay2_quat ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
+                          }`}>
+                            Quạt: {log.relay2_quat ? 'Bật' : 'Tắt'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                            log.relay3_maychieu ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
+                          }`}>
+                            Chiếu: {log.relay3_maychieu ? 'Bật' : 'Tắt'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                            log.relay4_dieuhoa ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
+                          }`}>
+                            Lạnh: {log.relay4_dieuhoa ? 'Bật' : 'Tắt'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-slate-500 font-sans">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Radio className="w-5 h-5 text-slate-600 animate-pulse" />
+                      <span>Đang kết nối luồng dữ liệu từ bảng sensor_data Supabase...</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ================= 3. CANH BAO MOI NHAT (ALERT LOGS) ================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
         {/* Header with Title and Filter Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
@@ -306,13 +460,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </button>
             </div>
-
-            <button
-              onClick={onTriggerRandomSmokeAlarm}
-              className="text-xs px-2.5 py-1.5 rounded-xl bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/30 font-medium transition-colors whitespace-nowrap"
-            >
-              + Test cảnh báo
-            </button>
           </div>
         </div>
 
@@ -358,6 +505,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                     ) : alert.type === 'smoke' || alert.type === 'fire' ? (
                       <Flame className="w-4 h-4" />
+                    ) : alert.type === 'gas' ? (
+                      <Wind className="w-4 h-4 text-white" />
                     ) : alert.type === 'temp_high' ? (
                       <TrendingUp className="w-4 h-4" />
                     ) : (

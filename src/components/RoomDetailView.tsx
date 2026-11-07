@@ -32,10 +32,14 @@ import {
   Check,
   AlertOctagon,
   Radio,
-  FlameKindling
+  FlameKindling,
+  Maximize2,
+  Minimize2,
+  Square
 } from 'lucide-react';
 import { Room, LightPreset, AcMode, AcFanSpeed, ProjectorInput, User } from '../types';
 import { soundManager } from '../utils/soundEffects';
+import { supabaseService } from '../services/supabaseService';
 
 interface RoomDetailViewProps {
   room: Room;
@@ -261,7 +265,17 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
     });
   };
 
-  const isAlarm = room.hasFireAlarm || room.smokeLevel > 300;
+  // CURTAIN (RÈM CỬA THÔNG MINH - ĐỒNG BỘ CỘT curtain BẢNG rooms)
+  const handleCurtain = async (curtainState: 'open' | 'close' | 'stop') => {
+    playClick();
+    onUpdateRoom({
+      ...room,
+      curtain: curtainState,
+    });
+    await supabaseService.updateCurtain(room.code || room.id, curtainState);
+  };
+
+  const isAlarm = room.hasFireAlarm || Boolean(room.flame) || room.smokeLevel > 300;
 
   return (
     <div className="pb-24 lg:pb-12 max-w-5xl mx-auto space-y-5 animate-in fade-in duration-200">
@@ -298,16 +312,13 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs animate-bounce shadow-lg shadow-red-600/30 active:scale-95 transition-all"
             >
               <Flame className="w-4 h-4 animate-spin" />
-              <span>ĐANG BÁO CHÁY! BẤM ĐỂ TẮT</span>
+              <span>ĐANG BÁO CHÁY! BẤM ĐỂ TẮT CÒI</span>
             </button>
           ) : (
-            <button
-              onClick={() => onTriggerSmokeForRoom(room.code || room.id, autoCutPowerOnFire)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-400 border border-slate-700 text-xs font-semibold transition-colors active:scale-95"
-            >
-              <Flame className="w-3.5 h-3.5 text-red-400" />
-              <span>Báo cháy phòng</span>
-            </button>
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>PCCC An toàn</span>
+            </div>
           )}
 
           {/* Delete room button (Admin only) */}
@@ -389,84 +400,140 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         </div>
       )}
 
-      {/* ================= 1. SENSOR METRICS CARD (LARGE TEMP & HUMIDITY) ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Temperature Card */}
-        <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Nhiệt độ phòng
+      {/* ================= 1. SENSOR METRICS CARD (DỮ LIỆU THỰC TẾ TỪ BẢNG SENSOR_DATA) ================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* Card 1: Temperature */}
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Nhiệt độ (nhiet_do)
             </span>
-            <div className="w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
-              <Thermometer className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
+              <Thermometer className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-white tracking-tight">
               {room.temperature.toFixed(1)}
             </span>
-            <span className="text-2xl font-bold text-orange-400">°C</span>
+            <span className="text-xl font-bold text-orange-400">°C</span>
           </div>
-          <p className="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-            Trạng thái: {room.temperature > 32 ? 'Nhiệt độ cao' : 'Mát mẻ, dễ chịu'}
+          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+            {room.temperature > 32 ? 'Nhiệt độ cao' : 'Nhiệt độ tiêu chuẩn'}
           </p>
         </div>
 
-        {/* Humidity Card */}
-        <div className="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Độ ẩm không khí
+        {/* Card 2: Humidity */}
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Độ ẩm (do_am)
             </span>
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <Droplets className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+              <Droplets className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-white tracking-tight">
               {Math.round(room.humidity)}
             </span>
-            <span className="text-2xl font-bold text-cyan-400">%</span>
+            <span className="text-xl font-bold text-cyan-400">%</span>
           </div>
-          <p className="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
-            Độ ẩm tiêu chuẩn lớp học (50% - 70%)
+          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+            Độ ẩm lớp học (50% - 70%)
           </p>
         </div>
 
-        {/* Smoke / Air Quality Card */}
-        <div
-          className={`sm:col-span-2 lg:col-span-1 relative overflow-hidden p-5 rounded-2xl border shadow-lg transition-all ${
-            isAlarm
-              ? 'bg-red-950/80 border-red-500 animate-pulse ring-2 ring-red-500/50'
-              : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Cảm biến khói & Cháy
+        {/* Card 3: Gas Concentration */}
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Khí gas (gas)
             </span>
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isAlarm
-                  ? 'bg-red-500 text-white animate-bounce'
-                  : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-              }`}
-            >
-              <Flame className="w-5 h-5" />
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              room.smokeLevel > 15 ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-slate-800 text-slate-400'
+            }`}>
+              <Wind className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2">
-            <span
-              className={`text-4xl sm:text-5xl font-black tracking-tight ${
-                isAlarm ? 'text-red-400 font-mono' : 'text-white'
-              }`}
-            >
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-3xl font-black tracking-tight ${
+              room.smokeLevel > 15 ? 'text-red-400 font-mono animate-pulse' : 'text-white'
+            }`}>
               {room.smokeLevel}
             </span>
-            <span className="text-sm font-semibold text-slate-400">ppm</span>
+            <span className="text-xs font-semibold text-slate-400">ppm / %</span>
           </div>
+          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full inline-block ${room.smokeLevel > 15 ? 'bg-red-400' : 'bg-emerald-400'}`} />
+            {room.smokeLevel > 15 ? 'Khí gas vượt ngưỡng!' : 'Khí gas an toàn (0%)'}
+          </p>
+        </div>
+
+        {/* Card 4: Flame Sensor (Cảm biến lửa - lua) */}
+        <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
+          room.flame 
+            ? 'bg-red-950/80 border-red-500 animate-pulse ring-2 ring-red-500/50' 
+            : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Cảm biến Lửa (lua)
+            </span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              room.flame ? 'bg-red-600 text-white animate-bounce' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+            }`}>
+              <Flame className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <span className={`text-xl font-black uppercase tracking-wide ${
+              room.flame ? 'text-red-400 animate-pulse' : 'text-emerald-400'
+            }`}>
+              {room.flame ? '🚨 CÓ LỬA!' : 'Ko có lửa'}
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full inline-block ${room.flame ? 'bg-red-500 animate-ping' : 'bg-emerald-400'}`} />
+            {room.flame ? 'Phát hiện ngọn lửa!' : 'Trạng thái an toàn'}
+          </p>
+        </div>
+
+        {/* Card 5: Air Quality (Chất lượng không khí - clkk) */}
+        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              Không khí (clkk)
+            </span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+              room.airQuality === 'tot'
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : room.airQuality === 'kem'
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+            }`}>
+              <Radio className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <span className={`text-xl font-black uppercase tracking-wide ${
+              room.airQuality === 'tot'
+                ? 'text-emerald-400'
+                : room.airQuality === 'kem'
+                ? 'text-amber-400'
+                : 'text-blue-400'
+            }`}>
+              {room.airQuality === 'tot' ? 'Tốt' : room.airQuality === 'kem' ? 'Kém' : 'Trung bình'}
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+              room.airQuality === 'tot' ? 'bg-emerald-400' : 'bg-amber-400'
+            }`} />
+            {room.airQuality === 'kem' ? 'Cần mở rèm/thông gió' : 'Không khí đạt chuẩn'}
+          </p>
         </div>
       </div>
 
@@ -531,9 +598,9 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         }`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Siren className={`w-4 h-4 ${isAlarm ? 'text-red-400 animate-spin' : 'text-orange-400'}`} />
+              <Siren className={`w-4 h-4 ${isAlarm ? 'text-red-400 animate-spin' : 'text-emerald-400'}`} />
               <span className="text-xs font-bold text-white uppercase tracking-wider">
-                Hộp chuông báo cháy điện tử (Manual Call Point)
+                Giám sát an toàn PCCC & Còi báo động thực tế
               </span>
             </div>
             <span className="text-[10px] font-mono text-slate-400">
@@ -551,13 +618,13 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                 <span>🛑 TẮT CÒI BÁO CHÁY & KHÔI PHỤC AN TOÀN</span>
               </button>
             ) : (
-              <button
-                onClick={() => onTriggerSmokeForRoom(room.code || room.id, autoCutPowerOnFire)}
-                className="w-full sm:flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-red-600/30 flex items-center justify-center gap-2 active:scale-95 transition-all border border-red-400/50"
-              >
-                <Flame className="w-4 h-4 text-yellow-300 animate-bounce" />
-                <span>🚨 NHẤN ĐỂ KÍCH HOẠT BÁO CHÁY PHÒNG HỌC (TEST BÁO ĐỘNG)</span>
-              </button>
+              <div className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Hệ thống giám sát thực tế đang hoạt động bình thường</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono">Dữ liệu từ cảm biến thực 24/7</span>
+              </div>
             )}
 
             {/* Auto Power Cut Option */}
@@ -1085,6 +1152,68 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         </div>
       </div>
 
+      {/* ================= 5. HỆ THỐNG RÈM CỬA THÔNG MINH (CURTAIN - CỘT curtain BẢNG rooms) ================= */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-slate-900/95 border border-slate-800 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+              <Maximize2 className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-base">Hệ thống Rèm cửa thông minh</h3>
+              <p className="text-xs text-slate-400">
+                Trạng thái: <strong className="text-indigo-400">
+                  {room.curtain === 'open' ? 'Đang mở (open)' : room.curtain === 'close' ? 'Đang đóng (close)' : 'Đã dừng (stop)'}
+                </strong>
+                {' '}• Điều khiển trực tiếp cột curtain trong bảng rooms
+              </p>
+            </div>
+          </div>
+
+          <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 self-start sm:self-auto">
+            Cột `curtain`: {room.curtain || 'stop'}
+          </span>
+        </div>
+
+        {/* 3 Nút bấm điều khiển: Mở - Dừng - Đóng */}
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            onClick={() => handleCurtain('open')}
+            className={`py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
+              room.curtain === 'open'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60'
+            }`}
+          >
+            <Maximize2 className="w-4 h-4 text-indigo-300" />
+            <span>MỞ RÈM</span>
+          </button>
+
+          <button
+            onClick={() => handleCurtain('stop')}
+            className={`py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
+              room.curtain === 'stop' || !room.curtain
+                ? 'bg-slate-700 text-white shadow-md ring-2 ring-slate-400'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60'
+            }`}
+          >
+            <Square className="w-4 h-4 text-amber-300" />
+            <span>DỪNG LẠI</span>
+          </button>
+
+          <button
+            onClick={() => handleCurtain('close')}
+            className={`py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
+              room.curtain === 'close'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60'
+            }`}
+          >
+            <Minimize2 className="w-4 h-4 text-indigo-300" />
+            <span>ĐÓNG RÈM</span>
+          </button>
+        </div>
+      </div>
 
       {/* ================= 6. CÔNG TẮC ĐIỆN NGUỒN PHÒNG ================= */}
       <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
