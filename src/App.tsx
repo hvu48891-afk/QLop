@@ -182,13 +182,17 @@ export default function App() {
       }
       setUsers(fetchedProfiles);
 
-      // Phục hồi phiên đăng nhập nếu đã lưu, hoặc tự động chọn nếu chỉ có 1 profile
+      // Phục hồi phiên đăng nhập nếu người dùng đã đăng nhập trước đó
       const savedUserId = typeof window !== 'undefined' ? localStorage.getItem('smart_classroom_user_id') : null;
       if (savedUserId) {
         const matched = fetchedProfiles.find((p) => p.id === savedUserId);
-        if (matched) setCurrentUser(matched);
-      } else if (fetchedProfiles.length === 1) {
-        setCurrentUser(fetchedProfiles[0]);
+        if (matched) {
+          setCurrentUser(matched);
+        } else {
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
       }
 
       // Khởi tạo activeAlertRoomsRef cho các phòng đang alert
