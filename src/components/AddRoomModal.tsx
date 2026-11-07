@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { X, Plus, Building2, Layers, Users, Zap, Check, ShieldAlert } from 'lucide-react';
+import { X, Plus, Building2, Layers, Users, Zap, Check, ShieldAlert, Flame } from 'lucide-react';
 import { Room } from '../types';
 
 interface AddRoomModalProps {
@@ -253,7 +253,13 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
             </div>
           </div>
 
-          <div className="pt-3 flex gap-2">
+          {/* Fire Protection & Alarm System Inclusion */}
+          <div className="p-3 rounded-2xl bg-red-950/30 border border-red-500/30 flex items-center gap-2.5 text-xs text-red-200">
+            <Flame className="w-4 h-4 text-red-400 shrink-0" />
+            <span>Tự động trang bị Đầu báo khói quang điện MQ-2 & Hộp còi báo cháy khẩn cấp cho phòng này.</span>
+          </div>
+
+          <div className="pt-2 flex gap-2">
             <button
               type="button"
               onClick={onClose}

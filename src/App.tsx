@@ -37,7 +37,9 @@ import { TimeSyncModal } from './components/TimeSyncModal';
 import { SchoolPowerModal } from './components/SchoolPowerModal';
 import { AddRoomModal } from './components/AddRoomModal';
 import { SqlHelperModal } from './components/SqlHelperModal';
-import { Flame, Bell, X, ShieldAlert, Clock, Zap, Loader2, AlertCircle, RefreshCw, Database, Terminal, Trash2 } from 'lucide-react';
+import { ThemeColorModal } from './components/ThemeColorModal';
+import { themeManager } from './utils/themeManager';
+import { Flame, Bell, X, ShieldAlert, Clock, Zap, Loader2, AlertCircle, RefreshCw, Database, Terminal, Trash2, Palette } from 'lucide-react';
 
 export default function App() {
   // Navigation & Screen State
@@ -78,7 +80,13 @@ export default function App() {
   const [isSchoolPowerModalOpen, setIsSchoolPowerModalOpen] = useState(false);
   const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
   const [isSqlHelperModalOpen, setIsSqlHelperModalOpen] = useState(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [autoScheduleToast, setAutoScheduleToast] = useState<{ title: string; time: string; action: string } | null>(null);
+
+  // Theme & Background Color State
+  const [currentThemeId, setCurrentThemeId] = useState<string>(() => themeManager.getCurrentThemeId());
+  const [customBgColor, setCustomBgColor] = useState<string>(() => themeManager.getCustomColor());
+  const [actualBgColor, setActualBgColor] = useState<string>(() => themeManager.getEffectiveBackgroundColor());
 
   // Keep refs for freshness
   const rulesRef = useRef(rules);
@@ -742,6 +750,115 @@ export default function App() {
     setTimeout(() => setDbSyncToast(null), 3000);
   };
 
+  // KÍCH HOẠT BÁO CHÁY PHÒNG HỌC (Manual Call Point hoặc Cảm biến khói vượt ngưỡng)
+  const handleTriggerFireAlarmForRoom = async (roomCode: string, autoCutPower: boolean = false) => {
+    const targetRoom = rooms.find((r) => r.code === roomCode || r.id === roomCode);
+    if (!targetRoom) return;
+
+    const newPowerState = autoCutPower ? false : targetRoom.isPowerOn;
+
+    // 1. Cập nhật ngay local state cho phản hồi tức thì 0ms
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.code === targetRoom.code || r.id === targetRoom.id
+          ? {
+              ...r,
+              status: 'alert',
+              hasFireAlarm: true,
+              smokeLevel: Math.max(r.smokeLevel, 550),
+              temperature: Math.max(r.temperature, 42.5),
+              isPowerOn: newPowerState,
+              emergencyPowerCut: autoCutPower ? true : r.emergencyPowerCut,
+              devices: autoCutPower
+                ? {
+                    ...r.devices,
+                    light: { ...r.devices.light, isOn: false },
+                    ac: { ...r.devices.ac, isOn: false },
+                    projector: { ...r.devices.projector, isOn: false },
+                    fan: { ...r.devices.fan, isOn: false },
+                  }
+                : r.devices,
+              lastUpdated: 'Vừa xong',
+            }
+          : r
+      )
+    );
+
+    // 2. Phát âm thanh còi hú báo cháy
+    if (settings.soundEnabled) {
+      soundManager.playFireSiren();
+    }
+
+    // 3. Đồng bộ vào Supabase
+    await supabaseService.setRoomAlert(targetRoom.code, true, newPowerState, 550);
+
+    // 4. Ghi bản ghi cảnh báo
+    const alertMsg = `🚨 BÁO CHÁY KHẨN CẤP tại ${targetRoom.name}! Nồng độ khói 550 ppm. Còi hú đang phát tín hiệu.${
+      autoCutPower ? ' Hệ thống đã tự động ngắt điện phòng.' : ''
+    }`;
+    const newAlert = await supabaseService.insertAlert({
+      room_code: targetRoom.code,
+      type: 'fire',
+      message: alertMsg,
+      level: 'critical',
+    });
+
+    if (newAlert) {
+      setAlerts((prev) => [newAlert, ...prev]);
+    }
+
+    logActivity(`🔥 Báo cháy khẩn cấp tại ${targetRoom.name}`, targetRoom.code, targetRoom.name);
+    setDbSyncToast({
+      message: `🚨 Đang báo cháy tại ${targetRoom.name}! Còi báo động đang kêu.`,
+      type: 'error',
+    });
+  };
+
+  // TẮT BÁO CHÁY & ĐẶT LẠI TRẠNG THÁI AN TOÀN CHO PHÒNG HỌC
+  const handleClearFireAlarmForRoom = async (roomCode: string) => {
+    const targetRoom = rooms.find((r) => r.code === roomCode || r.id === roomCode);
+    if (!targetRoom) return;
+
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.code === targetRoom.code || r.id === targetRoom.id
+          ? {
+              ...r,
+              status: r.isPowerOn ? 'on' : 'off',
+              hasFireAlarm: false,
+              smokeLevel: 25,
+              temperature: Math.min(r.temperature, 26.5),
+              lastUpdated: 'Vừa xong',
+            }
+          : r
+      )
+    );
+
+    await supabaseService.setRoomAlert(targetRoom.code, false, targetRoom.isPowerOn, 25);
+
+    const nowTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    setAlerts((prev) =>
+      prev.map((a) =>
+        (a.roomId === targetRoom.code || a.roomId === targetRoom.id) && !a.isResolved
+          ? { ...a, isResolved: true, resolvedAt: nowTime }
+          : a
+      )
+    );
+
+    activeAlertRoomsRef.current.delete(targetRoom.code);
+
+    if (settings.soundEnabled) {
+      soundManager.playSwitch(true);
+    }
+
+    logActivity(`✓ Đã tắt còi và đặt lại an toàn cho ${targetRoom.name}`, targetRoom.code, targetRoom.name);
+    setDbSyncToast({
+      message: `Đã khôi phục trạng thái an toàn cho ${targetRoom.name}!`,
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 3000);
+  };
+
   // QUY TẮC LẬP LỊCH: BẬT/TẮT, THÊM, SỬA, XÓA TRONG BẢNG 'schedules'
   const handleToggleRule = async (ruleId: string) => {
     const rule = rules.find((r) => r.id === ruleId);
@@ -924,103 +1041,67 @@ export default function App() {
     }
   };
 
+  // THAY ĐỔI MÀU TOÀN BỘ WEBSITE
+  const handleSelectTheme = (themeId: string, customHex?: string) => {
+    setCurrentThemeId(themeId);
+    if (customHex) {
+      setCustomBgColor(customHex);
+    }
+    const appliedPalette = themeId === 'custom' && customHex 
+      ? themeManager.setCustomColor(customHex) 
+      : themeManager.setTheme(themeId, customHex);
+    setActualBgColor(appliedPalette.bg);
+
+    const themeName = themeId === 'custom' 
+      ? `màu tự do (${customHex})` 
+      : themeId === 'oled' 
+      ? 'Đen OLED Tuyệt Đối' 
+      : themeId === 'navy' 
+      ? 'Xanh Biển Sâu' 
+      : themeId === 'emerald' 
+      ? 'Xanh Rừng Đêm' 
+      : themeId === 'violet' 
+      ? 'Tím Không Gian' 
+      : themeId === 'charcoal' 
+      ? 'Xám Than Chì' 
+      : themeId === 'steel'
+      ? 'Xanh Thép Công Nghiệp'
+      : themeId === 'dark-amber'
+      ? 'Nâu Cà Phê Trầm'
+      : themeId === 'crimson'
+      ? 'Đỏ Rượu Vang'
+      : themeId;
+
+    logActivity(`Đổi màu toàn bộ website sang [${themeName}]`, 'THEME', 'Giao diện');
+    setDbSyncToast({
+      message: `Đã đổi màu toàn bộ website sang [${themeName}]!`,
+      type: 'info',
+    });
+    setTimeout(() => setDbSyncToast(null), 3000);
+  };
+
+  const handleResetDefaultTheme = () => {
+    const defaultPalette = themeManager.resetToDefault();
+    setCurrentThemeId('midnight');
+    setCustomBgColor('#020617');
+    setActualBgColor(defaultPalette.bg);
+
+    logActivity('Khôi phục giao diện toàn bộ website mặc định (Midnight Slate)', 'THEME', 'Giao diện');
+    setDbSyncToast({
+      message: 'Đã khôi phục giao diện toàn bộ website về mặc định (Midnight Slate)!',
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 3000);
+  };
+
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId || r.code === selectedRoomId);
   const activeAlarmCount = rooms.filter((r) => r.status === 'alert' || r.hasFireAlarm).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-slate-950">
-      {/* Toast Alert Banner if active critical alert */}
-      {activeCriticalRoom && (
-        <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-bounce border-2 border-white/20">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/20">
-              <Flame className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="font-black text-sm uppercase tracking-wide">
-                CẢNH BÁO BÁO ĐỘNG: {activeCriticalRoom.name}
-              </p>
-              <p className="text-xs text-white/90">
-                Nồng độ khói {activeCriticalRoom.smokeLevel} ppm / Nhiệt độ {activeCriticalRoom.temperature}°C vượt ngưỡng an toàn!
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setSelectedRoomId(activeCriticalRoom.code)}
-            className="px-3 py-1 bg-white text-red-600 rounded-lg text-xs font-bold hover:bg-slate-100"
-          >
-            Xem
-          </button>
-        </div>
-      )}
-
-      {/* Supabase Connection Toast */}
-      {dbSyncToast && (
-        <div className={`fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md ${
-          dbSyncToast.type === 'error' ? 'bg-red-700 border-red-500' :
-          dbSyncToast.type === 'info' ? 'bg-amber-600 border-amber-400' : 
-          'bg-emerald-600 border-emerald-400/40'
-        } text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 border-2`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/20">
-              <Database className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="font-black text-sm uppercase tracking-wide">
-                SUPABASE DATABASE
-              </p>
-              <p className="text-xs text-white/95 leading-relaxed">{dbSyncToast.message}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {dbSyncToast.action && (
-              <button
-                onClick={() => {
-                  dbSyncToast.action?.onClick();
-                  setDbSyncToast(null);
-                }}
-                className="px-2.5 py-1 bg-white text-slate-900 rounded-lg text-xs font-bold hover:bg-slate-100 transition-colors"
-              >
-                {dbSyncToast.action.label}
-              </button>
-            )}
-            <button
-              onClick={() => setDbSyncToast(null)}
-              className="p-1 rounded-lg hover:bg-white/20 transition-colors shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Auto-schedule Toast */}
-      {autoScheduleToast && (
-        <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-md bg-gradient-to-r from-orange-600 to-amber-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 border-2 border-orange-400">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/20 animate-pulse">
-              <Zap className="w-5 h-5 text-amber-200 fill-amber-200" />
-            </div>
-            <div>
-              <p className="font-black text-sm uppercase tracking-wide flex items-center gap-1.5">
-                <span>⚡ TỰ ĐỘNG THỰC THI THEO LỊCH</span>
-                <span className="text-[11px] font-mono px-1.5 py-0.2 bg-black/30 rounded font-normal">
-                  {autoScheduleToast.time}
-                </span>
-              </p>
-              <p className="text-xs text-white/95 font-medium">{autoScheduleToast.title}</p>
-              <p className="text-[11px] text-orange-100">{autoScheduleToast.action}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setAutoScheduleToast(null)}
-            className="p-1 rounded-lg hover:bg-white/20 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
+    <div 
+      className="min-h-screen text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-slate-950 transition-colors duration-300"
+      style={{ backgroundColor: actualBgColor }}
+    >
       {/* CẢNH BÁO KHẨN CẤP AN TOÀN (BÁO CHÁY / KHÓI / QUÁ NHIỆT) */}
       {activeCriticalRoom && (
         <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-lg bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 border-2 border-red-400 animate-bounce">
@@ -1030,13 +1111,13 @@ export default function App() {
             </div>
             <div>
               <p className="font-black text-sm uppercase tracking-wide flex items-center gap-2">
-                <span>🚨 CẢNH BÁO AN TOÀN KHẨN CẤP!</span>
+                <span>🚨 CẢNH BÁO BÁO CHÁY KHẨN CẤP!</span>
               </p>
               <p className="text-xs text-white/95 font-bold">
-                Phát hiện sự cố tại {activeCriticalRoom.name} (Khói: {activeCriticalRoom.smokeLevel} ppm, Nhiệt độ: {activeCriticalRoom.temperature}°C)
+                Phát hiện sự cố cháy tại {activeCriticalRoom.name} (Khói: {activeCriticalRoom.smokeLevel} ppm, Nhiệt độ: {activeCriticalRoom.temperature.toFixed(1)}°C)
               </p>
               <p className="text-[11px] text-red-100 mt-0.5">
-                Cảm biến vượt ngưỡng an toàn. Vui lòng kiểm tra hiện trường hoặc tắt còi nếu là thử nghiệm.
+                Cảm biến PCCC vượt ngưỡng an toàn. Còi hú đang phát tín hiệu cảnh báo sơ tán.
               </p>
             </div>
           </div>
@@ -1048,10 +1129,7 @@ export default function App() {
               Xem phòng
             </button>
             <button
-              onClick={() => {
-                supabaseService.setRoomAlert(activeCriticalRoom.code, false, activeCriticalRoom.isPowerOn);
-                activeAlertRoomsRef.current.delete(activeCriticalRoom.code);
-              }}
+              onClick={() => handleClearFireAlarmForRoom(activeCriticalRoom.code || activeCriticalRoom.id)}
               className="px-3 py-1 bg-red-800/90 hover:bg-red-900 text-white rounded-xl text-[11px] font-semibold transition-colors active:scale-95 whitespace-nowrap"
             >
               Tắt còi
@@ -1089,6 +1167,7 @@ export default function App() {
             timeInfo={timeInfo}
             onOpenTimeSyncModal={() => setIsTimeModalOpen(true)}
             onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+            onOpenThemeModal={() => setIsThemeModalOpen(true)}
             poweredOnCount={rooms.filter((r) => r.status === 'on' || r.status === 'alert').length}
             onSyncDatabase={loadAllSupabaseData}
             isSyncing={isLoading}
@@ -1161,11 +1240,11 @@ export default function App() {
                 onBack={() => setSelectedRoomId(null)}
                 onUpdateRoom={handleUpdateRoom}
                 onEmergencyCut={handleEmergencyCut}
-                onTriggerSmokeForRoom={(code) => {
-                  supabaseService.setRoomAlert(code, true, true);
+                onTriggerSmokeForRoom={(code, autoCutPower) => {
+                  handleTriggerFireAlarmForRoom(code, autoCutPower);
                 }}
                 onClearSmokeForRoom={(code) => {
-                  supabaseService.setRoomAlert(code, false, true);
+                  handleClearFireAlarmForRoom(code);
                 }}
                 onDeleteRoom={currentUser?.role === 'admin' ? handleRequestDeleteRoom : undefined}
                 soundEnabled={settings.soundEnabled}
@@ -1197,9 +1276,13 @@ export default function App() {
                     currentUser={currentUser}
                     onSelectRoom={(r) => setSelectedRoomId(r.code || r.id)}
                     onToggleRoomPower={handleToggleRoomPower}
-                    onTriggerSmoke={(roomId, e) => {
+                    onTriggerSmoke={(roomId, e, isTrigger) => {
                       e.stopPropagation();
-                      supabaseService.setRoomAlert(roomId, true, true);
+                      if (isTrigger === false) {
+                        handleClearFireAlarmForRoom(roomId);
+                      } else {
+                        handleTriggerFireAlarmForRoom(roomId, false);
+                      }
                     }}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
                     onOpenAddRoomModal={currentUser?.role === 'admin' ? () => setIsAddRoomModalOpen(true) : undefined}
@@ -1243,6 +1326,11 @@ export default function App() {
                     onFetchFromDatabase={loadAllSupabaseData}
                     onOpenSqlHelper={() => setIsSqlHelperModalOpen(true)}
                     isPushingDb={isLoading}
+                    currentThemeId={currentThemeId}
+                    customColor={customBgColor}
+                    onSelectTheme={handleSelectTheme}
+                    onResetDefaultTheme={handleResetDefaultTheme}
+                    onOpenThemeModal={() => setIsThemeModalOpen(true)}
                   />
                 )}
               </>
@@ -1311,6 +1399,16 @@ export default function App() {
           setSupabaseStatus((prev) => ({ ...prev, rlsRestricted: false }));
           loadAllSupabaseData();
         }}
+      />
+
+      {/* Background Color Customization Modal */}
+      <ThemeColorModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        currentThemeId={currentThemeId}
+        customColor={customBgColor}
+        onSelectTheme={handleSelectTheme}
+        onResetDefault={handleResetDefaultTheme}
       />
 
       {/* Login Screen (Bắt buộc đăng nhập mỗi khi vào web) */}

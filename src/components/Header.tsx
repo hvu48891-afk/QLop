@@ -18,7 +18,8 @@ import {
   Clock,
   FastForward,
   RefreshCw,
-  Database
+  Database,
+  Palette
 } from 'lucide-react';
 import { User, TabType } from '../types';
 
@@ -36,6 +37,7 @@ interface HeaderProps {
   timeInfo?: import('../services/timeSyncService').TimeSyncInfo;
   onOpenTimeSyncModal?: () => void;
   onOpenSchoolPowerModal?: () => void;
+  onOpenThemeModal?: () => void;
   poweredOnCount?: number;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
@@ -55,6 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
   timeInfo,
   onOpenTimeSyncModal,
   onOpenSchoolPowerModal,
+  onOpenThemeModal,
   poweredOnCount = 0,
   onSyncDatabase,
   isSyncing = false,
@@ -163,6 +166,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Đồng bộ DB</span>
+          </button>
+        )}
+
+        {/* Change Entire Website Theme Color Button */}
+        {onOpenThemeModal && (
+          <button
+            onClick={onOpenThemeModal}
+            title="Đổi màu toàn bộ website (Navbar, Header, các thẻ phòng học và đường viền)"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 text-slate-200 rounded-xl text-xs font-semibold transition-all active:scale-95 group shadow-sm"
+          >
+            <Palette className="w-3.5 h-3.5 text-orange-400 group-hover:scale-110 transition-transform" />
+            <span className="hidden sm:inline">Đổi màu web</span>
           </button>
         )}
 

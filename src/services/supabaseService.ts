@@ -666,11 +666,33 @@ class SupabaseService {
   }
 
   /**
-   * Cập nhật trạng thái alert của phòng khi cảm biến vượt ngưỡng
+   * Cập nhật trạng thái alert / báo cháy của phòng học
    */
-  public async setRoomAlert(code: string, isAlert: boolean, powerOnState: boolean): Promise<boolean> {
+  public async setRoomAlert(
+    code: string, 
+    isAlert: boolean, 
+    powerOnState: boolean, 
+    smokeLevel?: number
+  ): Promise<boolean> {
+    const level = isAlert ? (smokeLevel ?? 520) : (smokeLevel ?? 25);
+
+    // Nếu kích hoạt báo cháy, ghi ngay bản ghi vào bảng alerts của Supabase
+    if (isAlert) {
+      try {
+        await this.insertAlert({
+          room_code: code,
+          type: 'fire',
+          message: `🚨 BÁO CHÁY KHẨN CẤP tại phòng ${code}! Cảm biến phát hiện khói ${level} ppm.`,
+          level: 'critical',
+        });
+      } catch (err) {
+        console.warn(`[Supabase] Không thể ghi cảnh báo cháy phòng ${code}:`, err);
+      }
+    }
+
     return this.updateRoom(code, {
       status: isAlert ? 'alert' : powerOnState ? 'on' : 'off',
+      smoke_level: level,
     });
   }
 

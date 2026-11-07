@@ -23,9 +23,12 @@ import {
   ExternalLink,
   Save,
   Database,
-  Sparkles
+  Sparkles,
+  Palette,
+  Pipette
 } from 'lucide-react';
 import { ThresholdSettings, User, UserRole } from '../types';
+import { PRESET_THEMES } from '../utils/themeManager';
 
 interface SettingsTabProps {
   settings: ThresholdSettings;
@@ -56,6 +59,11 @@ interface SettingsTabProps {
   onFetchFromDatabase?: () => Promise<void> | void;
   onOpenSqlHelper?: () => void;
   isPushingDb?: boolean;
+  currentThemeId?: string;
+  customColor?: string;
+  onSelectTheme?: (themeId: string, customHex?: string) => void;
+  onResetDefaultTheme?: () => void;
+  onOpenThemeModal?: () => void;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -74,6 +82,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onFetchFromDatabase,
   onOpenSqlHelper,
   isPushingDb,
+  currentThemeId,
+  customColor,
+  onSelectTheme,
+  onResetDefaultTheme,
+  onOpenThemeModal,
 }) => {
   // Local state for sliders before saving
   const [tempThreshold, setTempThreshold] = useState(settings.highTempThreshold);
@@ -324,7 +337,111 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
-      {/* ================= 2. QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG & PHÂN QUYỀN ================= */}
+      {/* ================= 2. GIAO DIỆN & MÀU TOÀN BỘ WEBSITE ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+              <Palette className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-base">Giao diện & Màu sắc toàn bộ website</h3>
+              <p className="text-xs text-slate-400">
+                Đổi màu đồng bộ cho thanh điều hướng, thanh tiêu đề, các thẻ phòng học và đường viền
+              </p>
+            </div>
+          </div>
+
+          {onOpenThemeModal && (
+            <button
+              onClick={onOpenThemeModal}
+              className="px-3.5 py-2 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/40 text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-auto active:scale-95 shadow-sm"
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>Bảng màu đầy đủ</span>
+            </button>
+          )}
+        </div>
+
+        {/* Quick Presets Grid */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-300">Bảng màu tiêu chuẩn hệ thống:</span>
+            {currentThemeId && (
+              <span className="text-[11px] text-orange-400 font-mono">
+                Đang dùng: {currentThemeId === 'custom' ? `Tự chọn (${customColor})` : PRESET_THEMES.find(t => t.id === currentThemeId)?.name || currentThemeId}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {PRESET_THEMES.slice(0, 8).map((preset) => {
+              const isSelected = currentThemeId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onSelectTheme && onSelectTheme(preset.id)}
+                  className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between h-20 active:scale-95 ${
+                    isSelected
+                      ? 'border-orange-500 ring-2 ring-orange-500/40 shadow-lg'
+                      : 'border-slate-800 hover:border-slate-700 hover:scale-[1.02]'
+                  }`}
+                  style={{ backgroundColor: preset.palette.bg }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span 
+                      className="w-3.5 h-3.5 rounded-full border border-white/30" 
+                      style={{ backgroundColor: preset.palette.surface }} 
+                    />
+                    {isSelected && (
+                      <span className="w-4 h-4 rounded-full bg-orange-500 text-slate-950 flex items-center justify-center font-bold">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-bold text-xs text-white truncate">{preset.name}</p>
+                    <p className="text-[10px] font-mono text-slate-400 uppercase">{preset.color}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom Color Selector Bar */}
+        <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={customColor && customColor.length === 7 ? customColor : '#020617'}
+              onChange={(e) => onSelectTheme && onSelectTheme('custom', e.target.value)}
+              className="w-9 h-9 rounded-xl cursor-pointer border border-slate-700 bg-transparent p-0"
+              title="Chọn màu tự do"
+            />
+            <div>
+              <p className="text-xs font-bold text-white">Tự chọn mã màu (Tự động đổi màu cả web)</p>
+              <p className="text-[11px] text-slate-400">Bấm vào ô màu để hòa sắc bất kỳ cho toàn bộ trang web</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onResetDefaultTheme && (
+              <button
+                type="button"
+                onClick={onResetDefaultTheme}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+              >
+                Mặc định (Midnight)
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+
+      {/* ================= 3. QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG & PHÂN QUYỀN ================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div className="flex items-center gap-3">

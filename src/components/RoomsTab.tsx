@@ -35,7 +35,7 @@ interface RoomsTabProps {
   currentUser?: User | null;
   onSelectRoom: (room: Room) => void;
   onToggleRoomPower: (roomId: string, e: React.MouseEvent) => void;
-  onTriggerSmoke: (roomId: string, e: React.MouseEvent) => void;
+  onTriggerSmoke: (roomId: string, e: React.MouseEvent, isTrigger?: boolean) => void;
   onOpenSchoolPowerModal?: () => void;
   onOpenAddRoomModal?: () => void;
   dbRoomCount?: number;
@@ -219,24 +219,37 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
         {/* Status Filter */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-          {[
-            { id: 'all', label: 'Tất cả' },
-            { id: 'on', label: 'Đang mở' },
-            { id: 'off', label: 'Tắt điện' },
-            { id: 'alarm', label: 'Báo khói' },
-          ].map((st) => (
-            <button
-              key={st.id}
-              onClick={() => setSelectedStatus(st.id)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                selectedStatus === st.id
-                  ? 'bg-slate-200 text-slate-950 font-bold'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800'
-              }`}
-            >
-              {st.label}
-            </button>
-          ))}
+          {(() => {
+            const fireAlarmCount = rooms.filter(
+              (r) => r.status === 'alert' || r.hasFireAlarm || r.smokeLevel >= 350
+            ).length;
+            return [
+              { id: 'all', label: `Tất cả (${rooms.length})` },
+              { id: 'on', label: 'Đang mở' },
+              { id: 'off', label: 'Tắt điện' },
+              { 
+                id: 'alarm', 
+                label: fireAlarmCount > 0 ? `🔥 Báo cháy (${fireAlarmCount})` : '🔥 Báo cháy',
+                isFire: fireAlarmCount > 0
+              },
+            ].map((st) => (
+              <button
+                key={st.id}
+                onClick={() => setSelectedStatus(st.id)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  selectedStatus === st.id
+                    ? st.id === 'alarm' && fireAlarmCount > 0
+                      ? 'bg-red-600 text-white font-black shadow-lg shadow-red-600/30'
+                      : 'bg-slate-200 text-slate-950 font-bold'
+                    : st.id === 'alarm' && fireAlarmCount > 0
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse font-bold'
+                    : 'bg-slate-950/60 text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                {st.label}
+              </button>
+            ));
+          })()}
         </div>
 
         {/* Master School Power Cut Trigger */}
@@ -329,8 +342,28 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Action buttons on card (Delete & Power) */}
+                {/* Action buttons on card (Fire Alarm, Delete & Power) */}
                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  {/* Nút Báo cháy nhanh trên thẻ phòng học */}
+                  {isAlarm ? (
+                    <button
+                      onClick={(e) => onTriggerSmoke(room.code || room.id, e, false)}
+                      title="Tắt còi báo cháy và khôi phục an toàn cho phòng này"
+                      className="px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1 shadow-lg shadow-red-600/40 animate-bounce active:scale-95 transition-all"
+                    >
+                      <Flame className="w-3.5 h-3.5 animate-spin" />
+                      <span>Tắt còi</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => onTriggerSmoke(room.code || room.id, e, true)}
+                      title="Kích hoạt báo cháy phòng học này (Fire Alarm Call Point)"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700/60 hover:border-red-500/40 transition-all active:scale-95 group/fire"
+                    >
+                      <Flame className="w-4 h-4 text-slate-400 group-hover/fire:text-red-400 group-hover/fire:scale-110 transition-transform" />
+                    </button>
+                  )}
+
                   {isAdmin && onDeleteRoom && (
                     <button
                       onClick={(e) => onDeleteRoom(room.code || room.id, e)}
@@ -358,30 +391,45 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
               {/* Status Alert Badge if fire alarm */}
               {isAlarm && (
-                <div className="mb-3 px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold flex items-center gap-1.5">
-                  <Flame className="w-4 h-4 shrink-0" />
-                  <span>CẢNH BÁO KHÓI/CHÁY ({room.smokeLevel} ppm)</span>
+                <div className="mb-3 px-3 py-2 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-xs font-bold flex items-center justify-between gap-1.5 shadow-lg shadow-red-600/30 animate-pulse">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Flame className="w-4 h-4 shrink-0 animate-bounce text-yellow-300" />
+                    <span className="truncate">🚨 BÁO CHÁY! Khói: {room.smokeLevel} ppm</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded bg-black/30 text-[10px] font-black uppercase tracking-wider shrink-0">
+                    CÒI ĐANG HÚ
+                  </span>
                 </div>
               )}
 
-              {/* Sensors summary (Temp & Humidity) */}
-              <div className="grid grid-cols-2 gap-2 my-2 py-2 px-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-                <div className="flex items-center gap-2">
-                  <Thermometer className="w-4 h-4 text-orange-400 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 leading-none">Nhiệt độ</p>
-                    <p className="text-sm font-bold text-white font-mono mt-0.5">
+              {/* Sensors summary (Nhiệt độ, Độ ẩm & Cảm biến khói PCCC) */}
+              <div className="grid grid-cols-3 gap-2 my-2 py-2 px-3 rounded-2xl bg-slate-950/60 border border-slate-800/80">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Thermometer className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[9px] text-slate-400 leading-none">Nhiệt độ</p>
+                    <p className="text-xs font-bold text-white font-mono mt-0.5 truncate">
                       {room.temperature.toFixed(1)}°C
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Droplets className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-slate-400 leading-none">Độ ẩm</p>
-                    <p className="text-sm font-bold text-white font-mono mt-0.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Droplets className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[9px] text-slate-400 leading-none">Độ ẩm</p>
+                    <p className="text-xs font-bold text-white font-mono mt-0.5 truncate">
                       {Math.round(room.humidity)}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Flame className={`w-3.5 h-3.5 shrink-0 ${isAlarm ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`} />
+                  <div className="min-w-0">
+                    <p className="text-[9px] text-slate-400 leading-none">Khói PCCC</p>
+                    <p className={`text-xs font-bold font-mono mt-0.5 truncate ${isAlarm ? 'text-red-400 font-black' : 'text-slate-200'}`}>
+                      {room.smokeLevel} ppm
                     </p>
                   </div>
                 </div>
