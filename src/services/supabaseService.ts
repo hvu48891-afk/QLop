@@ -666,7 +666,7 @@ class SupabaseService {
     powerOnState: boolean, 
     smokeLevel?: number
   ): Promise<boolean> {
-    const level = isAlert ? (smokeLevel ?? 520) : (smokeLevel ?? 25);
+    const level = isAlert ? (smokeLevel ?? 520) : (smokeLevel ?? 0);
 
     // Nếu kích hoạt báo cháy, ghi ngay bản ghi vào bảng alerts của Supabase
     if (isAlert) {
@@ -680,11 +680,16 @@ class SupabaseService {
       } catch (err) {
         console.warn(`[Supabase] Không thể ghi cảnh báo cháy phòng ${code}:`, err);
       }
+    } else {
+      // Khi tắt cảnh báo an toàn, xóa các cảnh báo liên quan của phòng trong bảng alerts
+      await this.clearAlertsForRoom(code);
     }
 
     return this.updateRoom(code, {
       status: isAlert ? 'alert' : powerOnState ? 'on' : 'off',
       smoke_level: level,
+      flame: isAlert,
+      relay_alarm: isAlert,
     });
   }
 
@@ -804,6 +809,69 @@ class SupabaseService {
     } catch (err) {
       console.error('[Supabase insertAlert] Ngoại lệ ghi alert:', err);
       return null;
+    }
+  }
+
+  /**
+   * Xóa một bản ghi cảnh báo khỏi bảng 'alerts'
+   */
+  public async deleteAlert(alertId: string | number): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('alerts')
+        .delete()
+        .eq('id', alertId);
+
+      if (error) {
+        console.error(`[Supabase deleteAlert] Lỗi xóa alert ${alertId}:`, error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`[Supabase deleteAlert] Ngoại lệ:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * Xóa toàn bộ cảnh báo của một phòng học cụ thể trong bảng 'alerts'
+   */
+  public async clearAlertsForRoom(roomCode: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('alerts')
+        .delete()
+        .eq('room_code', roomCode);
+
+      if (error) {
+        console.error(`[Supabase clearAlertsForRoom] Lỗi xóa alerts phòng ${roomCode}:`, error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`[Supabase clearAlertsForRoom] Ngoại lệ:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * Xóa toàn bộ cảnh báo trong bảng 'alerts'
+   */
+  public async clearAllAlerts(): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('alerts')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (error) {
+        console.error('[Supabase clearAllAlerts] Lỗi xóa bảng alerts:', error.message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('[Supabase clearAllAlerts] Ngoại lệ:', err);
+      return false;
     }
   }
 

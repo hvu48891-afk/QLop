@@ -40,6 +40,7 @@ import {
 import { Room, LightPreset, AcMode, AcFanSpeed, ProjectorInput, User } from '../types';
 import { soundManager } from '../utils/soundEffects';
 import { supabaseService } from '../services/supabaseService';
+import { parseAirQuality } from '../utils/airQuality';
 
 interface RoomDetailViewProps {
   room: Room;
@@ -400,142 +401,180 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         </div>
       )}
 
-      {/* ================= 1. SENSOR METRICS CARD (DỮ LIỆU THỰC TẾ TỪ BẢNG SENSOR_DATA) ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {/* Card 1: Temperature */}
-        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Nhiệt độ (nhiet_do)
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
-              <Thermometer className="w-4 h-4" />
+      {/* ================= 1. SENSOR METRICS CARD (DỮ LIỆU THỰC TẾ TỪ BẢNG SENSOR_DATA & ROOMS) ================= */}
+      {(() => {
+        const airInfo = parseAirQuality(room.airQuality);
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Card 1: Temperature */}
+            <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Nhiệt độ
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
+                  <Thermometer className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono">
+                  {room.temperature.toFixed(1)}
+                </span>
+                <span className="text-lg font-bold text-orange-400">°C</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                {room.temperature > 32 ? 'Nhiệt độ cao' : 'Tiêu chuẩn'}
+              </p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-white tracking-tight">
-              {room.temperature.toFixed(1)}
-            </span>
-            <span className="text-xl font-bold text-orange-400">°C</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-            {room.temperature > 32 ? 'Nhiệt độ cao' : 'Nhiệt độ tiêu chuẩn'}
-          </p>
-        </div>
 
-        {/* Card 2: Humidity */}
-        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Độ ẩm (do_am)
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <Droplets className="w-4 h-4" />
+            {/* Card 2: Humidity */}
+            <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Độ ẩm
+                </span>
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <Droplets className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight font-mono">
+                  {Math.round(room.humidity)}
+                </span>
+                <span className="text-lg font-bold text-cyan-400">%</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+                Lớp học (50-70%)
+              </p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-white tracking-tight">
-              {Math.round(room.humidity)}
-            </span>
-            <span className="text-xl font-bold text-cyan-400">%</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
-            Độ ẩm lớp học (50% - 70%)
-          </p>
-        </div>
 
-        {/* Card 3: Gas Concentration */}
-        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Khí gas (gas)
-            </span>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-              room.smokeLevel > 15 ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-slate-800 text-slate-400'
-            }`}>
-              <Wind className="w-4 h-4" />
+            {/* Card 3: Gas Concentration */}
+            <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Khí gas
+                </span>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  room.smokeLevel > 15 ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  <Wind className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-2xl sm:text-3xl font-black tracking-tight font-mono ${
+                  room.smokeLevel > 15 ? 'text-red-400 animate-pulse' : 'text-white'
+                }`}>
+                  {room.smokeLevel}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">ppm</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${room.smokeLevel > 15 ? 'bg-red-400' : 'bg-emerald-400'}`} />
+                {room.smokeLevel > 15 ? 'Khí gas cảnh báo!' : 'Khí gas an toàn'}
+              </p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className={`text-3xl font-black tracking-tight ${
-              room.smokeLevel > 15 ? 'text-red-400 font-mono animate-pulse' : 'text-white'
-            }`}>
-              {room.smokeLevel}
-            </span>
-            <span className="text-xs font-semibold text-slate-400">ppm / %</span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full inline-block ${room.smokeLevel > 15 ? 'bg-red-400' : 'bg-emerald-400'}`} />
-            {room.smokeLevel > 15 ? 'Khí gas vượt ngưỡng!' : 'Khí gas an toàn (0%)'}
-          </p>
-        </div>
 
-        {/* Card 4: Flame Sensor (Cảm biến lửa - lua) */}
-        <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
-          room.flame 
-            ? 'bg-red-950/80 border-red-500 animate-pulse ring-2 ring-red-500/50' 
-            : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
-        }`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Cảm biến Lửa (lua)
-            </span>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-              room.flame ? 'bg-red-600 text-white animate-bounce' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+            {/* Card 4: Flame Sensor */}
+            <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
+              room.flame 
+                ? 'bg-red-950/80 border-red-500 animate-pulse ring-2 ring-red-500/50' 
+                : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
             }`}>
-              <Flame className="w-4 h-4" />
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Cảm biến Lửa
+                </span>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  room.flame ? 'bg-red-600 text-white animate-bounce' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                }`}>
+                  <Flame className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <span className={`text-xl font-black uppercase tracking-wide ${
+                  room.flame ? 'text-red-400 animate-pulse' : 'text-emerald-400'
+                }`}>
+                  {room.flame ? '🚨 CÓ LỬA!' : 'Ko có'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${room.flame ? 'bg-red-500 animate-ping' : 'bg-emerald-400'}`} />
+                {room.flame ? 'Phát hiện ngọn lửa!' : 'An toàn'}
+              </p>
             </div>
-          </div>
-          <div>
-            <span className={`text-xl font-black uppercase tracking-wide ${
-              room.flame ? 'text-red-400 animate-pulse' : 'text-emerald-400'
-            }`}>
-              {room.flame ? '🚨 CÓ LỬA!' : 'Ko có lửa'}
-            </span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full inline-block ${room.flame ? 'bg-red-500 animate-ping' : 'bg-emerald-400'}`} />
-            {room.flame ? 'Phát hiện ngọn lửa!' : 'Trạng thái an toàn'}
-          </p>
-        </div>
 
-        {/* Card 5: Air Quality (Chất lượng không khí - clkk) */}
-        <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Không khí (clkk)
-            </span>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-              room.airQuality === 'tot'
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : room.airQuality === 'kem'
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+            {/* Card 5: Carbon Monoxide (CO) */}
+            <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
+              airInfo.isCoAlert 
+                ? 'bg-red-950/40 border-red-500/80 ring-1 ring-red-500/40' 
+                : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
             }`}>
-              <Radio className="w-4 h-4" />
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Khí CO
+                </span>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  airInfo.isCoAlert
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                }`}>
+                  <Wind className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-2xl sm:text-3xl font-black tracking-tight font-mono ${
+                  airInfo.isCoAlert ? 'text-red-400' : 'text-amber-300'
+                }`}>
+                  {airInfo.co}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">ppm</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                  airInfo.isCoAlert ? 'bg-red-400 animate-ping' : 'bg-emerald-400'
+                }`} />
+                {airInfo.isCoAlert ? 'CO cảnh báo!' : 'CO đạt chuẩn'}
+              </p>
+            </div>
+
+            {/* Card 6: Carbon Dioxide (CO2) */}
+            <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
+              airInfo.isCo2Alert 
+                ? 'bg-amber-950/40 border-amber-500/80 ring-1 ring-amber-500/40' 
+                : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Khí CO2
+                </span>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  airInfo.isCo2Alert
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                }`}>
+                  <Radio className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-2xl sm:text-3xl font-black tracking-tight font-mono ${
+                  airInfo.isCo2Alert ? 'text-amber-300' : 'text-emerald-400'
+                }`}>
+                  {airInfo.co2}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">ppm</span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                  airInfo.isCo2Alert ? 'bg-amber-400' : 'bg-emerald-400'
+                }`} />
+                {airInfo.isCo2Alert ? 'Cần thông gió/mở rèm' : 'CO2 trong lành'}
+              </p>
             </div>
           </div>
-          <div>
-            <span className={`text-xl font-black uppercase tracking-wide ${
-              room.airQuality === 'tot'
-                ? 'text-emerald-400'
-                : room.airQuality === 'kem'
-                ? 'text-amber-400'
-                : 'text-blue-400'
-            }`}>
-              {room.airQuality === 'tot' ? 'Tốt' : room.airQuality === 'kem' ? 'Kém' : 'Trung bình'}
-            </span>
-          </div>
-          <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full inline-block ${
-              room.airQuality === 'tot' ? 'bg-emerald-400' : 'bg-amber-400'
-            }`} />
-            {room.airQuality === 'kem' ? 'Cần mở rèm/thông gió' : 'Không khí đạt chuẩn'}
-          </p>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ================= 2. HỆ THỐNG BÁO CHÁY & AN TOÀN PCCC PHÒNG HỌC ================= */}
       <div className={`p-5 sm:p-6 rounded-3xl border shadow-xl transition-all ${

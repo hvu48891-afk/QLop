@@ -30,6 +30,7 @@ import {
   Cpu
 } from 'lucide-react';
 import { Room, AlertLog, ActivityLog, DbSensorData } from '../types';
+import { parseAirQuality } from '../utils/airQuality';
 
 interface DashboardTabProps {
   rooms: Room[];
@@ -41,6 +42,8 @@ interface DashboardTabProps {
   onTurnOffEmptyRooms: () => void;
   onResolveAlert: (alertId: string) => void;
   onPushToDatabase?: () => Promise<void> | void;
+  onSyncAlerts?: () => Promise<void> | void;
+  onClearAllAlarms?: () => void;
   isPushingDb?: boolean;
   onOpenSchoolPowerModal?: () => void;
   dbRoomCount?: number;
@@ -56,6 +59,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onTurnOffEmptyRooms,
   onResolveAlert,
   onPushToDatabase,
+  onSyncAlerts,
+  onClearAllAlarms,
   isPushingDb,
   onOpenSchoolPowerModal,
   dbRoomCount,
@@ -303,7 +308,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <th className="py-2.5 px-3">Độ ẩm</th>
                 <th className="py-2.5 px-3">Khí Gas</th>
                 <th className="py-2.5 px-3">Cảm biến Lửa</th>
-                <th className="py-2.5 px-3">Chất lượng KK (CLKK)</th>
+                <th className="py-2.5 px-3">Khí CO</th>
+                <th className="py-2.5 px-3">Khí CO2</th>
                 <th className="py-2.5 px-3">Trạng thái 4 Rơ-le</th>
               </tr>
             </thead>
@@ -313,6 +319,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   const luaStr = String(log.lua || '').trim().toLowerCase();
                   const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
                   const gasVal = Number(log.gas) || 0;
+                  const air = parseAirQuality(log.clkk);
                   const timeFormatted = log.created_at
                     ? new Date(log.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                     : 'Vừa xong';
@@ -364,9 +371,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 font-sans text-xs text-slate-300">
-                        <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
-                          {log.clkk || 'Bình thường'}
+                      <td className="py-2.5 px-3 font-sans">
+                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] font-mono ${
+                          air.isCoAlert ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'text-amber-300'
+                        }`}>
+                          {air.coText}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-sans">
+                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] font-mono ${
+                          air.isCo2Alert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-emerald-300'
+                        }`}>
+                          {air.co2Text}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 font-sans">
@@ -398,7 +414,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 })
               ) : (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500 font-sans">
+                  <td colSpan={10} className="py-8 text-center text-slate-500 font-sans">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Radio className="w-5 h-5 text-slate-600 animate-pulse" />
                       <span>Đang kết nối luồng dữ liệu từ bảng sensor_data Supabase...</span>
@@ -460,6 +476,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </button>
             </div>
+
+            {/* Nút Đồng bộ lại cảnh báo */}
+            {onSyncAlerts && (
+              <button
+                onClick={() => onSyncAlerts()}
+                title="Đồng bộ lại toàn bộ danh sách cảnh báo từ cơ sở dữ liệu Supabase"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500/50 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              >
+                <Database className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Đồng bộ cảnh báo</span>
+              </button>
+            )}
+
+            {/* Nút Đặt lại tất cả cảnh báo về an toàn */}
+            {onClearAllAlarms && (unresolvedAlerts.length > 0 || criticalAlarmCount > 0) && (
+              <button
+                onClick={onClearAllAlarms}
+                title="Xóa toàn bộ cảnh báo và đặt lại an toàn cho tất cả các phòng trên Database"
+                className="px-3 py-1.5 rounded-xl bg-red-600/80 hover:bg-red-600 border border-red-500/50 text-xs font-bold text-white flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Đặt lại an toàn</span>
+              </button>
+            )}
           </div>
         </div>
 

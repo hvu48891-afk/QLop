@@ -331,6 +331,37 @@ export default function App() {
     return () => clearInterval(connectionChecker);
   }, []);
 
+  // 4. ĐỒNG BỘ ĐỊNH KỲ DỮ LIỆU CẢM BIẾN TỪ BẢNG SENSOR_DATA
+  useEffect(() => {
+    const sensorPoller = setInterval(async () => {
+      try {
+        const sensors = await supabaseService.fetchRecentSensorData(15);
+        if (sensors && sensors.length > 0) {
+          setRecentSensorLogs((prev) => {
+            const map = new Map<number, DbSensorData>();
+            sensors.forEach((s) => map.set(s.id, s));
+            prev.forEach((s) => {
+              if (!map.has(s.id)) map.set(s.id, s);
+            });
+            return Array.from(map.values()).slice(0, 25);
+          });
+
+          // Cập nhật thông số mới nhất cho các phòng
+          setRooms((prev) =>
+            prev.map((r) => {
+              const matched = sensors.find((s) => s.room_code === r.code || (!s.room_code && r.code === 'A201'));
+              return matched ? supabaseService.mergeSensorDataToRoom(r, matched) : r;
+            })
+          );
+        }
+      } catch (e) {
+        // Bỏ qua lỗi ngắt quãng mạng nền
+      }
+    }, 6000);
+
+    return () => clearInterval(sensorPoller);
+  }, []);
+
   // 5. ĐỒNG BỘ THỜI GIAN THẬT & TỰ ĐỘNG HÓA LẬP LỊCH
   useEffect(() => {
     const unsubscribeTime = timeSyncService.subscribe((currentTime, info) => {
@@ -672,8 +703,11 @@ export default function App() {
   };
 
   // XÁC NHẬN GIẢI QUYẾT CẢNH BÁO
-  const handleResolveAlert = (alertId: string) => {
+  const handleResolveAlert = async (alertId: string) => {
     const resolvedTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const targetAlert = alerts.find((a) => a.id === alertId);
+
+    // 1. Cập nhật ngay local state
     setAlerts((prev) =>
       prev.map((a) =>
         a.id === alertId
@@ -681,24 +715,143 @@ export default function App() {
           : a
       )
     );
+
+    // 2. Xóa khỏi bảng alerts trong Supabase
+    await supabaseService.deleteAlert(alertId);
+
+    // 3. Nếu không còn cảnh báo chưa giải quyết nào cho phòng này, đưa phòng về an toàn
+    if (targetAlert) {
+      const roomCode = targetAlert.roomId;
+      const remainingRoomAlerts = alerts.filter(
+        (a) => a.roomId === roomCode && a.id !== alertId && !a.isResolved
+      );
+
+      if (remainingRoomAlerts.length === 0) {
+        const targetRoom = rooms.find((r) => r.code === roomCode || r.id === roomCode);
+        if (targetRoom) {
+          activeAlertRoomsRef.current.delete(roomCode);
+          setRooms((prev) =>
+            prev.map((r) =>
+              r.code === targetRoom.code || r.id === targetRoom.id
+                ? {
+                    ...r,
+                    status: r.isPowerOn ? 'on' : 'off',
+                    hasFireAlarm: false,
+                    smokeLevel: 0,
+                    flame: false,
+                    relayAlarm: false,
+                  }
+                : r
+            )
+          );
+          await supabaseService.setRoomAlert(targetRoom.code, false, targetRoom.isPowerOn, 0);
+        }
+      }
+    }
+
+    setDbSyncToast({
+      message: '✓ Đã xác nhận an toàn và đồng bộ vào Database Supabase!',
+      type: 'success',
+    });
+    setTimeout(() => setDbSyncToast(null), 3000);
+  };
+
+  // ĐỒNG BỘ LẠI CẢNH BÁO TỪ DATABASE VÀ BẢNG SENSOR_DATA
+  const handleSyncAlerts = async () => {
+    setDbSyncToast({
+      message: 'Đang đồng bộ cảnh báo với Database Supabase...',
+      type: 'info',
+    });
+    try {
+      const [fetchedAlerts, fetchedSensors, fetchedRooms] = await Promise.all([
+        supabaseService.fetchAlerts(),
+        supabaseService.fetchRecentSensorData(25),
+        supabaseService.fetchRooms(),
+      ]);
+
+      setRecentSensorLogs(fetchedSensors || []);
+
+      // Lấy bản ghi sensor mới nhất theo từng phòng
+      const latestSensorByRoom: Record<string, any> = {};
+      fetchedSensors.forEach((s) => {
+        const code = s.room_code || 'A201';
+        if (!latestSensorByRoom[code]) {
+          latestSensorByRoom[code] = s;
+        }
+      });
+
+      // Kiểm tra tính nhất quán giữa phòng trong Database và cảm biến
+      for (const room of fetchedRooms) {
+        const latestSensor = latestSensorByRoom[room.code];
+        const luaStr = String(latestSensor?.lua || '').trim().toLowerCase();
+        const hasSensorFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
+        const sensorGas = Number(latestSensor?.gas) || 0;
+        const isSensorDangerous = hasSensorFlame || sensorGas > 25;
+
+        // Nếu phòng trong DB đang ở trạng thái alert hoặc flame/relay_alarm nhưng sensor bình thường:
+        if ((room.status === 'alert' || room.flame || room.relayAlarm) && !isSensorDangerous) {
+          await supabaseService.setRoomAlert(room.code, false, room.isPowerOn, 0);
+          await supabaseService.clearAlertsForRoom(room.code);
+        }
+      }
+
+      // Tải lại rooms và alerts mới nhất sau khi tự động chuẩn hóa
+      const [finalRooms, finalAlerts] = await Promise.all([
+        supabaseService.fetchRooms(),
+        supabaseService.fetchAlerts(),
+      ]);
+
+      const cleanAlerts = finalAlerts.filter(
+        (a) => !a.message.toLowerCase().includes('phòng này đã ngắt điện') &&
+               !a.message.toLowerCase().includes('cảm biến khói phát hiện nồng độ vượt ngưỡng (25 ppm') &&
+               !a.message.toLowerCase().includes('[test') &&
+               !a.message.toLowerCase().includes('test cảnh báo')
+      );
+
+      setRooms(finalRooms);
+      setAlerts(cleanAlerts);
+      activeAlertRoomsRef.current.clear();
+      finalRooms.forEach((r) => {
+        if (r.status === 'alert') activeAlertRoomsRef.current.add(r.code);
+      });
+
+      setDbSyncToast({
+        message: `✓ Đã đồng bộ cảnh báo thành công (${cleanAlerts.filter((a) => !a.isResolved).length} cảnh báo đang kích hoạt)!`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      console.error('[handleSyncAlerts] Lỗi đồng bộ cảnh báo:', err);
+      setDbSyncToast({
+        message: `Lỗi đồng bộ cảnh báo: ${err?.message || 'Không thể kết nối Supabase'}`,
+        type: 'error',
+      });
+    }
+    setTimeout(() => setDbSyncToast(null), 3500);
   };
 
   // TẮT TẤT CẢ CÁC CẢNH BÁO / ĐẶT LẠI CẢM BIẾN AN TOÀN
   const handleClearAllAlarms = async () => {
+    // 1. Xóa toàn bộ cảnh báo trong bảng alerts của Supabase
+    await supabaseService.clearAllAlerts();
+
+    // 2. Đặt lại tất cả các phòng trên Supabase
     for (const r of rooms) {
-      if (r.status === 'alert' || r.hasFireAlarm || r.smokeLevel >= settings.smokeThreshold) {
-        await supabaseService.setRoomAlert(r.code, false, r.isPowerOn);
+      if (r.status === 'alert' || r.hasFireAlarm || r.smokeLevel > 0 || r.flame || r.relayAlarm) {
+        await supabaseService.setRoomAlert(r.code, false, r.isPowerOn, 0);
       }
     }
 
+    // 3. Cập nhật state phòng trên web
     setRooms((prev) =>
       prev.map((r) =>
-        r.status === 'alert' || r.hasFireAlarm
+        r.status === 'alert' || r.hasFireAlarm || r.flame || r.relayAlarm || r.smokeLevel > 0
           ? {
               ...r,
               status: r.isPowerOn ? 'on' : 'off',
               hasFireAlarm: false,
-              smokeLevel: 25,
+              smokeLevel: 0,
+              flame: false,
+              relayAlarm: false,
               temperature: Math.min(r.temperature, 26),
               lastUpdated: 'Vừa xong',
             }
@@ -719,7 +872,7 @@ export default function App() {
 
     logActivity('✓ Đã tắt còi và đặt lại toàn bộ cảnh báo về trạng thái an toàn', 'ALL', 'Toàn trường');
     setDbSyncToast({
-      message: 'Đã đặt lại toàn bộ hệ thống cảm biến về trạng thái an toàn!',
+      message: '✓ Đã xóa sạch cảnh báo và đưa toàn bộ phòng học về an toàn trong Database!',
       type: 'success',
     });
     setTimeout(() => setDbSyncToast(null), 3000);
@@ -801,7 +954,9 @@ export default function App() {
               ...r,
               status: r.isPowerOn ? 'on' : 'off',
               hasFireAlarm: false,
-              smokeLevel: 25,
+              smokeLevel: 0,
+              flame: false,
+              relayAlarm: false,
               temperature: Math.min(r.temperature, 26.5),
               lastUpdated: 'Vừa xong',
             }
@@ -809,7 +964,9 @@ export default function App() {
       )
     );
 
-    await supabaseService.setRoomAlert(targetRoom.code, false, targetRoom.isPowerOn, 25);
+    // Xóa toàn bộ cảnh báo của phòng khỏi bảng alerts và reset bảng rooms trong Supabase
+    await supabaseService.clearAlertsForRoom(targetRoom.code);
+    await supabaseService.setRoomAlert(targetRoom.code, false, targetRoom.isPowerOn, 0);
 
     const nowTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     setAlerts((prev) =>
@@ -828,7 +985,7 @@ export default function App() {
 
     logActivity(`✓ Đã tắt còi và đặt lại an toàn cho ${targetRoom.name}`, targetRoom.code, targetRoom.name);
     setDbSyncToast({
-      message: `Đã khôi phục trạng thái an toàn cho ${targetRoom.name}!`,
+      message: `Đã khôi phục trạng thái an toàn cho ${targetRoom.name} trong Database!`,
       type: 'success',
     });
     setTimeout(() => setDbSyncToast(null), 3000);
@@ -1243,6 +1400,8 @@ export default function App() {
                     onTurnOffEmptyRooms={handleTurnOffEmptyRooms}
                     onResolveAlert={handleResolveAlert}
                     onPushToDatabase={loadAllSupabaseData}
+                    onSyncAlerts={handleSyncAlerts}
+                    onClearAllAlarms={handleClearAllAlarms}
                     isPushingDb={isPushingDb}
                     onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
                     dbRoomCount={rooms.length}

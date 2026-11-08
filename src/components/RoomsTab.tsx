@@ -26,9 +26,11 @@ import {
   Trash2,
   WifiOff,
   Wifi,
-  Cpu
+  Cpu,
+  Radio
 } from 'lucide-react';
 import { Room, User } from '../types';
+import { parseAirQuality } from '../utils/airQuality';
 
 interface RoomsTabProps {
   rooms: Room[];
@@ -394,48 +396,73 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 </div>
               )}
 
-              {/* Sensors summary (Nhiệt độ, Độ ẩm, Khí gas & Lửa từ bảng sensor_data) */}
-              <div className="grid grid-cols-4 gap-1.5 my-2 py-2 px-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/80">
-                <div className="flex items-center gap-1 min-w-0">
-                  <Thermometer className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[8px] text-slate-400 leading-none">Nhiệt độ</p>
-                    <p className="text-[11px] font-bold text-white font-mono mt-0.5 truncate">
-                      {room.temperature.toFixed(1)}°C
-                    </p>
-                  </div>
-                </div>
+              {/* Sensors summary (Nhiệt độ, Độ ẩm, Khí gas, Lửa, CO & CO2 từ bảng sensor_data & rooms) */}
+              {(() => {
+                const air = parseAirQuality(room.airQuality);
+                return (
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 my-2 py-2 px-2.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-left">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Thermometer className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[8px] text-slate-400 leading-none">Nhiệt độ</p>
+                        <p className="text-[11px] font-bold text-white font-mono mt-0.5 truncate">
+                          {room.temperature.toFixed(1)}°C
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-1 min-w-0">
-                  <Droplets className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[8px] text-slate-400 leading-none">Độ ẩm</p>
-                    <p className="text-[11px] font-bold text-white font-mono mt-0.5 truncate">
-                      {Math.round(room.humidity)}%
-                    </p>
-                  </div>
-                </div>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Droplets className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[8px] text-slate-400 leading-none">Độ ẩm</p>
+                        <p className="text-[11px] font-bold text-white font-mono mt-0.5 truncate">
+                          {Math.round(room.humidity)}%
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-1 min-w-0">
-                  <Flame className={`w-3.5 h-3.5 shrink-0 ${room.flame ? 'text-red-400 animate-bounce' : 'text-emerald-400'}`} />
-                  <div className="min-w-0">
-                    <p className="text-[8px] text-slate-400 leading-none">Lửa</p>
-                    <p className={`text-[11px] font-bold mt-0.5 truncate ${room.flame ? 'text-red-400 font-black animate-pulse' : 'text-slate-200'}`}>
-                      {room.flame ? 'CÓ LỬA' : 'An toàn'}
-                    </p>
-                  </div>
-                </div>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Wind className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[8px] text-slate-400 leading-none">Khí gas</p>
+                        <p className={`text-[11px] font-bold font-mono mt-0.5 truncate ${room.smokeLevel > 15 ? 'text-red-400' : 'text-slate-200'}`}>
+                          {room.smokeLevel} ppm
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-1 min-w-0">
-                  <Wind className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[8px] text-slate-400 leading-none">Khí gas</p>
-                    <p className={`text-[11px] font-bold font-mono mt-0.5 truncate ${room.smokeLevel > 15 ? 'text-red-400' : 'text-slate-200'}`}>
-                      {room.smokeLevel} ppm
-                    </p>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Flame className={`w-3.5 h-3.5 shrink-0 ${room.flame ? 'text-red-400 animate-bounce' : 'text-emerald-400'}`} />
+                      <div className="min-w-0">
+                        <p className="text-[8px] text-slate-400 leading-none">Lửa</p>
+                        <p className={`text-[11px] font-bold mt-0.5 truncate ${room.flame ? 'text-red-400 font-black animate-pulse' : 'text-slate-200'}`}>
+                          {room.flame ? 'CÓ LỬA' : 'Ko có'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Wind className={`w-3.5 h-3.5 shrink-0 ${air.isCoAlert ? 'text-red-400 animate-pulse' : 'text-amber-400'}`} />
+                      <div className="min-w-0">
+                        <p className="text-[8px] text-slate-400 leading-none">Khí CO</p>
+                        <p className={`text-[11px] font-bold font-mono mt-0.5 truncate ${air.isCoAlert ? 'text-red-400' : 'text-amber-300'}`}>
+                          {air.coText}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Radio className={`w-3.5 h-3.5 shrink-0 ${air.isCo2Alert ? 'text-amber-400' : 'text-emerald-400'}`} />
+                      <div className="min-w-0">
+                        <p className="text-[8px] text-slate-400 leading-none">Khí CO2</p>
+                        <p className={`text-[11px] font-bold font-mono mt-0.5 truncate ${air.isCo2Alert ? 'text-amber-300' : 'text-emerald-300'}`}>
+                          {air.co2Text}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Devices active indicators bar */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
