@@ -14,6 +14,8 @@ import {
   Lightbulb, 
   Wind, 
   Tv, 
+  Fan,
+  Siren,
   Power, 
   Check, 
   AlertOctagon,
@@ -27,7 +29,8 @@ import {
   WifiOff,
   Wifi,
   Cpu,
-  Radio
+  Radio,
+  Lock
 } from 'lucide-react';
 import { Room, User } from '../types';
 import { parseAirQuality } from '../utils/airQuality';
@@ -37,6 +40,11 @@ interface RoomsTabProps {
   currentUser?: User | null;
   onSelectRoom: (room: Room) => void;
   onToggleRoomPower: (roomId: string, e: React.MouseEvent) => void;
+  onToggleRelay?: (
+    roomCode: string,
+    relayType: 'relay1_den' | 'relay2_quat' | 'relay3_maychieu' | 'relay4_dieuhoa' | 'relay_alarm' | 'power_on' | 'auto_mode' | 'khan_cap',
+    customState?: boolean
+  ) => void;
   onTriggerSmoke: (roomId: string, e: React.MouseEvent, isTrigger?: boolean) => void;
   onOpenSchoolPowerModal?: () => void;
   onOpenAddRoomModal?: () => void;
@@ -53,6 +61,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   currentUser,
   onSelectRoom,
   onToggleRoomPower,
+  onToggleRelay,
   onTriggerSmoke,
   onOpenSchoolPowerModal,
   onOpenAddRoomModal,
@@ -254,15 +263,26 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
           })()}
         </div>
 
-        {/* Master School Power Cut Trigger */}
+        {/* Master School Power Cut Trigger (Sáng khi ở Admin, các cấp quyền khác thì không nhấn được) */}
         {onOpenSchoolPowerModal && (
           <button
-            onClick={onOpenSchoolPowerModal}
-            title="Mở bảng điều khiển tắt điện toàn trường"
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap"
+            type="button"
+            onClick={isAdmin ? onOpenSchoolPowerModal : undefined}
+            disabled={!isAdmin}
+            title={
+              isAdmin
+                ? "Cầu dao tổng trường: Mở bảng điều khiển tắt/cắt điện toàn trường (Quản trị viên)"
+                : "Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng toàn trường!"
+            }
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap ${
+              isAdmin
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border border-red-400 text-white shadow-red-600/30 ring-2 ring-red-400/50 active:scale-95 cursor-pointer animate-pulse'
+                : 'bg-slate-900/50 border border-slate-800 text-slate-500 opacity-40 cursor-not-allowed select-none'
+            }`}
           >
-            <ZapOff className="w-3.5 h-3.5 text-amber-400" />
-            <span>Tắt điện toàn trường</span>
+            <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-yellow-300 stroke-[2.5]' : 'text-slate-600'}`} />
+            <span>Cầu dao tổng trường</span>
+            {!isAdmin && <Lock className="w-3 h-3 text-slate-500 ml-0.5" />}
           </button>
         )}
       </div>
@@ -464,44 +484,109 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 );
               })()}
 
-              {/* Devices active indicators bar */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                <div className="flex items-center gap-2">
-                  <span
-                    title={room.devices.light.isOn ? 'Đèn đang bật' : 'Đèn tắt'}
-                    className={`p-1.5 rounded-lg ${
+              {/* Relay Quick Controls Bar (4 Relays + Alarm Relay) */}
+              <div 
+                className="flex items-center justify-between pt-2.5 mt-1 border-t border-slate-800/80 text-xs"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* R1: Đèn */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay1_den')}
+                    title={room.devices.light.isOn ? 'Relay 1 (Đèn): Đang BẬT. Bấm để tắt.' : 'Relay 1 (Đèn): Đang TẮT. Bấm để bật.'}
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
                       room.devices.light.isOn
-                        ? 'bg-amber-500/20 text-amber-400'
-                        : 'bg-slate-800/60 text-slate-600'
+                        ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
                     }`}
                   >
-                    <Lightbulb className="w-3.5 h-3.5" />
-                  </span>
+                    <Lightbulb className="w-3 h-3 stroke-[2.2]" />
+                    <span>R1</span>
+                  </button>
 
-                  <span
-                    title={room.devices.ac.isOn ? 'Điều hòa đang bật' : 'Điều hòa tắt'}
-                    className={`p-1.5 rounded-lg ${
-                      room.devices.ac.isOn
-                        ? 'bg-cyan-500/20 text-cyan-400'
-                        : 'bg-slate-800/60 text-slate-600'
+                  {/* R2: Quạt */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay2_quat')}
+                    title={room.devices.fan.isOn ? 'Relay 2 (Quạt): Đang BẬT. Bấm để tắt.' : 'Relay 2 (Quạt): Đang TẮT. Bấm để bật.'}
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                      room.devices.fan.isOn
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
                     }`}
                   >
-                    <Wind className="w-3.5 h-3.5" />
-                  </span>
+                    <Fan className={`w-3 h-3 stroke-[2.2] ${room.devices.fan.isOn ? 'animate-spin' : ''}`} />
+                    <span>R2</span>
+                  </button>
 
-                  <span
-                    title={room.devices.projector.isOn ? 'Máy chiếu đang bật' : 'Máy chiếu tắt'}
-                    className={`p-1.5 rounded-lg ${
+                  {/* R3: Máy chiếu */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay3_maychieu')}
+                    title={room.devices.projector.isOn ? 'Relay 3 (Máy chiếu): Đang BẬT. Bấm để tắt.' : 'Relay 3 (Máy chiếu): Đang TẮT. Bấm để bật.'}
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
                       room.devices.projector.isOn
-                        ? 'bg-purple-500/20 text-purple-400'
-                        : 'bg-slate-800/60 text-slate-600'
+                        ? 'bg-purple-500 text-white shadow-sm shadow-purple-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
                     }`}
                   >
-                    <Tv className="w-3.5 h-3.5" />
-                  </span>
+                    <Tv className="w-3 h-3 stroke-[2.2]" />
+                    <span>R3</span>
+                  </button>
+
+                  {/* R4: Điều hòa */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay4_dieuhoa')}
+                    title={room.devices.ac.isOn ? 'Relay 4 (Điều hòa): Đang BẬT. Bấm để tắt.' : 'Relay 4 (Điều hòa): Đang TẮT. Bấm để bật.'}
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                      room.devices.ac.isOn
+                        ? 'bg-cyan-500 text-slate-950 shadow-sm shadow-cyan-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
+                    }`}
+                  >
+                    <Wind className="w-3 h-3 stroke-[2.2]" />
+                    <span>R4</span>
+                  </button>
+
+                  {/* R5 / Còi Báo Động */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'khan_cap')}
+                    title={room.relayAlarm ? 'Còi báo động đang HÚ. Bấm để tắt.' : 'Còi báo động đang TẮT. Bấm để test còi.'}
+                    className={`px-1.5 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                      room.relayAlarm
+                        ? 'bg-red-600 text-white animate-bounce shadow-sm shadow-red-600/40'
+                        : 'bg-slate-800/80 text-red-400/80 hover:text-red-300 border border-slate-700/60'
+                    }`}
+                  >
+                    <Siren className={`w-3 h-3 stroke-[2.2] ${room.relayAlarm ? 'animate-spin' : ''}`} />
+                    <span>Còi</span>
+                  </button>
+
+                  {/* Auto Mode Toggle */}
+                  {room.relayControl && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'auto_mode')}
+                      title={
+                        room.relayControl.auto_mode
+                          ? 'auto_mode đang BẬT (Tự động theo cảm biến). Bấm để chuyển Thủ công.'
+                          : 'auto_mode đang TẮT (Thủ công). Bấm để bật Tự động.'
+                      }
+                      className={`px-1.5 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                        room.relayControl.auto_mode
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
+                      }`}
+                    >
+                      <span>{room.relayControl.auto_mode ? 'Auto' : 'Tay'}</span>
+                    </button>
+                  )}
                 </div>
 
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-slate-400 shrink-0 font-medium ml-2">
                   {room.isOccupied ? '👥 Có lớp' : '🚪 Trống'}
                 </span>
               </div>

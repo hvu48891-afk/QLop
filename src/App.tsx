@@ -13,7 +13,8 @@ import {
   UserRole,
   ThresholdSettings, 
   ActivityLog,
-  DbSensorData
+  DbSensorData,
+  DbRelayControl
 } from './types';
 import { 
   INITIAL_RULES, 
@@ -50,8 +51,8 @@ export default function App() {
   // Core Data State - Toàn bộ dữ liệu đọc từ Supabase thật
   const [rooms, setRooms] = useState<Room[]>([]);
   const [alerts, setAlerts] = useState<AlertLog[]>([]);
-  const [rules, setRules] = useState<ScheduleRule[]>(INITIAL_RULES);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [rules, setRules] = useState<ScheduleRule[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<ThresholdSettings>(INITIAL_SETTINGS);
   const [activities, setActivities] = useState<ActivityLog[]>(INITIAL_ACTIVITIES);
@@ -174,9 +175,7 @@ export default function App() {
                !a.message.toLowerCase().includes('test cảnh báo')
       );
       setAlerts(cleanAlerts);
-      if (fetchedSchedules.length > 0) {
-        setRules(fetchedSchedules);
-      }
+      setRules(fetchedSchedules);
       if (fetchedSettings) {
         setSettings(fetchedSettings);
       }
@@ -228,7 +227,10 @@ export default function App() {
           const index = prev.findIndex((r) => r.code === updatedRoom.code);
           if (index >= 0) {
             const next = [...prev];
-            next[index] = updatedRoom;
+            const existing = next[index];
+            next[index] = existing.relayControl
+              ? supabaseService.mergeRelayControlToRoom(updatedRoom, existing.relayControl)
+              : updatedRoom;
             return next;
           }
           return [...prev, updatedRoom];
@@ -296,6 +298,23 @@ export default function App() {
             soundManager.playAlarm();
           }
         }
+      },
+      (rc: DbRelayControl) => {
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.code === rc.room_code || (!rc.room_code && r.code === 'A201')
+              ? supabaseService.mergeRelayControlToRoom(r, rc)
+              : r
+          )
+        );
+      },
+      async () => {
+        const latestSchedules = await supabaseService.fetchSchedules();
+        setRules(latestSchedules);
+      },
+      async () => {
+        const latestSettings = await supabaseService.fetchSettings();
+        if (latestSettings) setSettings(latestSettings);
       }
     );
 
@@ -331,11 +350,15 @@ export default function App() {
     return () => clearInterval(connectionChecker);
   }, []);
 
-  // 4. ĐỒNG BỘ ĐỊNH KỲ DỮ LIỆU CẢM BIẾN TỪ BẢNG SENSOR_DATA
+  // 4. ĐỒNG BỘ ĐỊNH KỲ DỮ LIỆU CẢM BIẾN (sensor_data) VÀ BẢNG LỆNH RƠ-LE (relay_control)
   useEffect(() => {
     const sensorPoller = setInterval(async () => {
       try {
-        const sensors = await supabaseService.fetchRecentSensorData(15);
+        const [sensors, relayControls] = await Promise.all([
+          supabaseService.fetchRecentSensorData(15),
+          supabaseService.fetchRelayControls(),
+        ]);
+
         if (sensors && sensors.length > 0) {
           setRecentSensorLogs((prev) => {
             const map = new Map<number, DbSensorData>();
@@ -345,15 +368,27 @@ export default function App() {
             });
             return Array.from(map.values()).slice(0, 25);
           });
-
-          // Cập nhật thông số mới nhất cho các phòng
-          setRooms((prev) =>
-            prev.map((r) => {
-              const matched = sensors.find((s) => s.room_code === r.code || (!s.room_code && r.code === 'A201'));
-              return matched ? supabaseService.mergeSensorDataToRoom(r, matched) : r;
-            })
-          );
         }
+
+        // Cập nhật thông số cảm biến & phản hồi relay_control mới nhất cho các phòng
+        setRooms((prev) =>
+          prev.map((r) => {
+            let nextRoom = r;
+            if (sensors && sensors.length > 0) {
+              const matchedSensor = sensors.find((s) => s.room_code === r.code || (!s.room_code && r.code === 'A201'));
+              if (matchedSensor) {
+                nextRoom = supabaseService.mergeSensorDataToRoom(nextRoom, matchedSensor);
+              }
+            }
+            if (relayControls && relayControls.length > 0) {
+              const matchedRc = relayControls.find((rc) => rc.room_code === r.code || (!rc.room_code && r.code === 'A201'));
+              if (matchedRc) {
+                nextRoom = supabaseService.mergeRelayControlToRoom(nextRoom, matchedRc);
+              }
+            }
+            return nextRoom;
+          })
+        );
       } catch (e) {
         // Bỏ qua lỗi ngắt quãng mạng nền
       }
@@ -413,12 +448,40 @@ export default function App() {
     setActivities((prev) => [newAct, ...prev]);
   };
 
-  // CẬP NHẬT CHI TIẾT PHÒNG HỌC (GỌI UPDATE BẢNG ROOMS VỚI .eq('code', ...))
+  // CẬP NHẬT CHI TIẾT PHÒNG HỌC (GỌI UPDATE BẢNG ROOMS VÀ ĐỒNG BỘ BẢNG RELAY_CONTROL)
   const handleUpdateRoom = async (updated: Room) => {
-    setRooms((prev) => prev.map((r) => (r.code === updated.code ? updated : r)));
+    const prevRoom = roomsRef.current.find((r) => r.code === updated.code || r.id === updated.id);
+    const roomCode = updated.code || updated.id;
 
-    // Cập nhật lên Supabase theo đúng các cột
-    await supabaseService.updateRoom(updated.code, {
+    roomsRef.current = roomsRef.current.map((r) => (r.code === roomCode ? updated : r));
+    setRooms((prev) => prev.map((r) => (r.code === roomCode ? updated : r)));
+
+    const relaysChanged =
+      !prevRoom ||
+      prevRoom.devices.light.isOn !== updated.devices.light.isOn ||
+      prevRoom.devices.fan.isOn !== updated.devices.fan.isOn ||
+      prevRoom.devices.projector.isOn !== updated.devices.projector.isOn ||
+      prevRoom.devices.ac.isOn !== updated.devices.ac.isOn ||
+      prevRoom.relayAlarm !== updated.relayAlarm;
+
+    if (relaysChanged) {
+      const rcRes = await supabaseService.updateRelayControl(roomCode, {
+        relay1_den: updated.devices.light.isOn,
+        relay2_quat: updated.devices.fan.isOn,
+        relay3_maychieu: updated.devices.projector.isOn,
+        relay4_dieuhoa: updated.devices.ac.isOn,
+        khan_cap: updated.relayAlarm,
+        auto_mode: false,
+      });
+      if (rcRes.row) {
+        setRooms((prev) =>
+          prev.map((r) => (r.code === roomCode ? supabaseService.mergeRelayControlToRoom(r, rcRes.row!) : r))
+        );
+      }
+    }
+
+    // Cập nhật lên Supabase theo đúng các cột trong bảng rooms
+    await supabaseService.updateRoom(roomCode, {
       power_on: updated.isPowerOn,
       status: updated.hasFireAlarm ? 'alert' : updated.isPowerOn ? 'on' : 'off',
       light_on: updated.devices.light.isOn,
@@ -428,78 +491,241 @@ export default function App() {
       ac_mode: updated.devices.ac.mode,
       projector_on: updated.devices.projector.isOn,
       fan_on: updated.devices.fan.isOn,
+      relay_alarm: updated.relayAlarm,
     });
 
-    logActivity(`Cập nhật trạng thái thiết bị ${updated.name}`, updated.code, updated.name);
+    logActivity(`Cập nhật trạng thái thiết bị ${updated.name}`, roomCode, updated.name);
+  };
+
+  // THAO TÁC BẬT / TẮT TRỰC TIẾP CÁC RƠ-LE TRONG BẢNG relay_control (RELAY 1, 2, 3, 4, KHẨN CẤP, AUTO MODE, CẦU DAO)
+  const handleToggleRelay = async (
+    roomCode: string,
+    relayType: 'relay1_den' | 'relay2_quat' | 'relay3_maychieu' | 'relay4_dieuhoa' | 'relay_alarm' | 'power_on' | 'auto_mode' | 'khan_cap',
+    customState?: boolean
+  ) => {
+    const targetRoom = roomsRef.current.find((r) => r.code === roomCode || r.id === roomCode);
+    if (!targetRoom) return;
+
+    const targetCode = targetRoom.code || targetRoom.id;
+    let newState: boolean;
+    const updatedDevices = { ...targetRoom.devices };
+    let newPowerOn = targetRoom.isPowerOn;
+    let newRelayAlarm = targetRoom.relayAlarm;
+    const currentAutoMode = targetRoom.relayControl?.auto_mode ?? false;
+    let nextAutoMode = false; // Mặc định khi bấm tay sẽ chuyển auto_mode = false
+    let label = '';
+
+    if (relayType === 'relay1_den') {
+      newState = customState !== undefined ? customState : !targetRoom.devices.light.isOn;
+      updatedDevices.light = {
+        ...updatedDevices.light,
+        isOn: newState,
+        brightness: newState ? (updatedDevices.light.brightness || 85) : 0,
+        preset: newState ? (updatedDevices.light.preset === 'off' ? 'study' : updatedDevices.light.preset) : 'off',
+      };
+      label = `Relay 1 (Đèn): ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'relay2_quat') {
+      newState = customState !== undefined ? customState : !targetRoom.devices.fan.isOn;
+      updatedDevices.fan = {
+        ...updatedDevices.fan,
+        isOn: newState,
+        speed: newState ? (updatedDevices.fan.speed || 2) : 0,
+      };
+      label = `Relay 2 (Quạt): ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'relay3_maychieu') {
+      newState = customState !== undefined ? customState : !targetRoom.devices.projector.isOn;
+      updatedDevices.projector = {
+        ...updatedDevices.projector,
+        isOn: newState,
+      };
+      label = `Relay 3 (Máy chiếu): ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'relay4_dieuhoa') {
+      newState = customState !== undefined ? customState : !targetRoom.devices.ac.isOn;
+      updatedDevices.ac = {
+        ...updatedDevices.ac,
+        isOn: newState,
+      };
+      label = `Relay 4 (Điều hòa): ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'relay_alarm' || relayType === 'khan_cap') {
+      newState = customState !== undefined ? customState : !(targetRoom.relayControl?.khan_cap ?? targetRoom.relayAlarm);
+      newRelayAlarm = newState;
+      nextAutoMode = currentAutoMode;
+      label = `Khẩn cấp / Còi Báo Động: ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'auto_mode') {
+      newState = customState !== undefined ? customState : !currentAutoMode;
+      nextAutoMode = newState;
+      label = `Chế độ Auto (relay_control): ${newState ? 'TỰ ĐỘNG' : 'THỦ CÔNG'}`;
+    } else if (relayType === 'power_on') {
+      newState = customState !== undefined ? customState : !targetRoom.isPowerOn;
+      newPowerOn = newState;
+      if (!newState) {
+        updatedDevices.light = { ...updatedDevices.light, isOn: false, brightness: 0, preset: 'off' };
+        updatedDevices.fan = { ...updatedDevices.fan, isOn: false, speed: 0 };
+        updatedDevices.projector = { ...updatedDevices.projector, isOn: false };
+        updatedDevices.ac = { ...updatedDevices.ac, isOn: false };
+      } else {
+        nextAutoMode = currentAutoMode;
+      }
+      label = `Cầu dao nguồn: ${newState ? 'BẬT' : 'TẮT'}`;
+    } else {
+      return;
+    }
+
+    if (settings.soundEnabled) soundManager.playSwitch(newState);
+
+    const optimisticRc: DbRelayControl = {
+      id: targetRoom.relayControl?.id ?? 0,
+      room_code: targetCode,
+      auto_mode: nextAutoMode,
+      relay1_den: updatedDevices.light.isOn,
+      relay2_quat: updatedDevices.fan.isOn,
+      relay3_maychieu: updatedDevices.projector.isOn,
+      relay4_dieuhoa: updatedDevices.ac.isOn,
+      khan_cap: newRelayAlarm,
+      updated_at: new Date().toISOString(),
+      state_relay1_den: targetRoom.relayControl?.state_relay1_den ?? false,
+      state_relay2_quat: targetRoom.relayControl?.state_relay2_quat ?? false,
+      state_relay3_maychieu: targetRoom.relayControl?.state_relay3_maychieu ?? false,
+      state_relay4_dieuhoa: targetRoom.relayControl?.state_relay4_dieuhoa ?? false,
+      state_updated_at: targetRoom.relayControl?.state_updated_at,
+    };
+
+    const updatedRoom: Room = {
+      ...targetRoom,
+      devices: updatedDevices,
+      isPowerOn: newPowerOn,
+      relayAlarm: newRelayAlarm,
+      relayControl: optimisticRc,
+      status: targetRoom.hasFireAlarm ? 'alert' : newPowerOn ? 'on' : 'off',
+      lastUpdated: 'Vừa xong',
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Cập nhật UI tức thì 0ms và đồng bộ ref tránh race-condition khi bấm liên tiếp
+    roomsRef.current = roomsRef.current.map((r) => (r.code === targetCode ? updatedRoom : r));
+    setRooms((prev) => prev.map((r) => (r.code === targetCode ? updatedRoom : r)));
+
+    // Ghi đồng bộ vào bảng relay_control và bảng rooms trên Supabase
+    const { roomUpdated, relayControlRow } = await supabaseService.toggleRelay(
+      targetCode,
+      relayType,
+      newState
+    );
+
+    if (relayControlRow) {
+      setRooms((prev) =>
+        prev.map((r) => (r.code === targetCode ? supabaseService.mergeRelayControlToRoom(r, relayControlRow) : r))
+      );
+    }
+
+    if (roomUpdated) {
+      logActivity(`[relay_control] ${label} phòng ${targetRoom.name}`, targetCode, targetRoom.name);
+      setDbSyncToast({
+        message: `✓ Đã cập nhật ${label} vào bảng relay_control!`,
+        type: 'success',
+      });
+      setTimeout(() => setDbSyncToast(null), 3000);
+    } else {
+      // Khôi phục lại trạng thái cũ nếu ghi Database thất bại
+      roomsRef.current = roomsRef.current.map((r) => (r.code === targetCode ? targetRoom : r));
+      setRooms((prev) => prev.map((r) => (r.code === targetCode ? targetRoom : r)));
+    }
   };
 
   // BẬT / TẮT NGUỒN ĐIỆN PHÒNG (CẬP NHẬT CỘT power_on VỚI .eq('code', ...))
   const handleToggleRoomPower = async (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const target = rooms.find((r) => r.id === roomId || r.code === roomId);
+    const target = roomsRef.current.find((r) => r.id === roomId || r.code === roomId);
     if (!target) return;
 
+    const targetCode = target.code || target.id;
     const newState = !target.isPowerOn;
     if (settings.soundEnabled) {
       soundManager.playSwitch(newState);
     }
 
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.code === target.code
+    const updatedRoom: Room = {
+      ...target,
+      isPowerOn: newState,
+      status: newState ? 'on' : 'off',
+      emergencyPowerCut: false,
+      devices: newState
+        ? target.devices
+        : {
+            ...target.devices,
+            light: { ...target.devices.light, isOn: false, brightness: 0, preset: 'off' },
+            ac: { ...target.devices.ac, isOn: false },
+            projector: { ...target.devices.projector, isOn: false },
+            fan: { ...target.devices.fan, isOn: false, speed: 0 },
+          },
+      relayControl:
+        !newState && target.relayControl
           ? {
-              ...r,
-              isPowerOn: newState,
-              status: newState ? 'on' : 'off',
-              emergencyPowerCut: false,
-              devices: newState
-                ? r.devices
-                : {
-                    ...r.devices,
-                    light: { ...r.devices.light, isOn: false },
-                    ac: { ...r.devices.ac, isOn: false },
-                    projector: { ...r.devices.projector, isOn: false },
-                    fan: { ...r.devices.fan, isOn: false },
-                  },
-              lastUpdated: 'Vừa xong',
+              ...target.relayControl,
+              relay1_den: false,
+              relay2_quat: false,
+              relay3_maychieu: false,
+              relay4_dieuhoa: false,
+              auto_mode: false,
             }
-          : r
-      )
-    );
+          : target.relayControl,
+      lastUpdated: 'Vừa xong',
+    };
 
-    await supabaseService.updatePower(target.code, newState);
-    logActivity(`${newState ? 'Bật nguồn điện' : 'Tắt nguồn điện'} ${target.name}`, target.code, target.name);
+    roomsRef.current = roomsRef.current.map((r) => (r.code === targetCode ? updatedRoom : r));
+    setRooms((prev) => prev.map((r) => (r.code === targetCode ? updatedRoom : r)));
+
+    await supabaseService.updatePower(targetCode, newState);
+    logActivity(`${newState ? 'Bật nguồn điện' : 'Tắt nguồn điện'} ${target.name}`, targetCode, target.name);
   };
 
-  // CÔNG TẮC KHẨN CẤP / CẮT NGUỒN ĐIỆN (CẬP NHẬT power_on)
+  // CÔNG TẮC KHẨN CẤP / CẮT NGUỒN ĐIỆN (CẬP NHẬT power_on & relay_control)
   const handleEmergencyCut = async (roomId: string, cutOff: boolean) => {
-    const target = rooms.find((r) => r.id === roomId || r.code === roomId);
+    const target = roomsRef.current.find((r) => r.id === roomId || r.code === roomId);
     if (!target) return;
 
+    const targetCode = target.code || target.id;
     const powerState = !cutOff;
     if (settings.soundEnabled) {
       soundManager.playSwitch(powerState);
     }
 
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.code === target.code
+    const updatedRoom: Room = {
+      ...target,
+      emergencyPowerCut: false,
+      isPowerOn: powerState,
+      status: powerState ? 'on' : 'off',
+      devices: powerState
+        ? target.devices
+        : {
+            ...target.devices,
+            light: { ...target.devices.light, isOn: false, brightness: 0, preset: 'off' },
+            ac: { ...target.devices.ac, isOn: false },
+            projector: { ...target.devices.projector, isOn: false },
+            fan: { ...target.devices.fan, isOn: false, speed: 0 },
+          },
+      relayControl:
+        !powerState && target.relayControl
           ? {
-              ...r,
-              emergencyPowerCut: false,
-              isPowerOn: powerState,
-              status: powerState ? 'on' : 'off',
-              lastUpdated: 'Vừa xong',
+              ...target.relayControl,
+              relay1_den: false,
+              relay2_quat: false,
+              relay3_maychieu: false,
+              relay4_dieuhoa: false,
+              auto_mode: false,
             }
-          : r
-      )
-    );
+          : target.relayControl,
+      lastUpdated: 'Vừa xong',
+    };
 
-    await supabaseService.updatePower(target.code, powerState);
+    roomsRef.current = roomsRef.current.map((r) => (r.code === targetCode ? updatedRoom : r));
+    setRooms((prev) => prev.map((r) => (r.code === targetCode ? updatedRoom : r)));
+
+    await supabaseService.updatePower(targetCode, powerState);
 
     logActivity(
       cutOff ? `Tắt nguồn điện ${target.name}` : `Bật nguồn điện ${target.name}`,
-      target.code,
+      targetCode,
       target.name
     );
   };
@@ -1001,15 +1227,20 @@ export default function App() {
       prev.map((r) => (r.id === ruleId ? { ...r, isEnabled: newEnabled } : r))
     );
 
-    await supabaseService.toggleScheduleEnabled(ruleId, newEnabled);
-    logActivity(`${newEnabled ? 'Bật' : 'Tắt'} quy tắc "${rule.title}"`, 'RULE', rule.title);
+    const ok = await supabaseService.toggleScheduleEnabled(ruleId, newEnabled);
+    if (ok) {
+      logActivity(`${newEnabled ? 'Bật' : 'Tắt'} quy tắc "${rule.title}"`, 'RULE', rule.title);
+    } else {
+      const fresh = await supabaseService.fetchSchedules();
+      setRules(fresh);
+    }
   };
 
   const handleSaveRule = async (savedRule: ScheduleRule) => {
     const exists = rules.some((r) => r.id === savedRule.id);
     if (exists) {
       setRules((prev) => prev.map((r) => (r.id === savedRule.id ? savedRule : r)));
-      await supabaseService.updateSchedule(savedRule.id, {
+      const ok = await supabaseService.updateSchedule(savedRule.id, {
         name: savedRule.title,
         scope: savedRule.scope,
         target: savedRule.targetId,
@@ -1018,6 +1249,11 @@ export default function App() {
         days: savedRule.daysOfWeek,
         enabled: savedRule.isEnabled,
       });
+      if (!ok) {
+        const fresh = await supabaseService.fetchSchedules();
+        setRules(fresh);
+        return;
+      }
     } else {
       const inserted = await supabaseService.insertSchedule({
         name: savedRule.title,
@@ -1031,44 +1267,71 @@ export default function App() {
       if (inserted) {
         setRules((prev) => [inserted, ...prev]);
       } else {
-        setRules((prev) => [savedRule, ...prev]);
+        return;
       }
     }
-    logActivity(`Lưu quy tắc "${savedRule.title}"`, 'RULE', savedRule.title);
+    logActivity(`Lưu quy tắc "${savedRule.title}" vào Supabase`, 'RULE', savedRule.title);
   };
 
   const handleDeleteRule = async (ruleId: string) => {
     const rule = rules.find((r) => r.id === ruleId);
     setRules((prev) => prev.filter((r) => r.id !== ruleId));
-    await supabaseService.deleteSchedule(ruleId);
-    if (rule) {
-      logActivity(`Xóa quy tắc "${rule.title}"`, 'RULE', rule.title);
+    const ok = await supabaseService.deleteSchedule(ruleId);
+    if (ok) {
+      if (rule) {
+        logActivity(`Xóa quy tắc "${rule.title}" khỏi Supabase`, 'RULE', rule.title);
+      }
+    } else {
+      const fresh = await supabaseService.fetchSchedules();
+      setRules(fresh);
     }
   };
 
-  // THỰC THI QUY TẮC
-  const handleTriggerRuleNow = (rule: ScheduleRule, isAuto: boolean = false) => {
+  // THỰC THI QUY TẮC (ĐỒNG BỘ CẢ relay_control VÀ rooms)
+  const handleTriggerRuleNow = async (rule: ScheduleRule, isAuto: boolean = false) => {
     if (settings.soundEnabled) {
       if (isAuto) soundManager.playSwitch(true);
       else soundManager.playClick();
     }
 
-    let targetRooms = rooms;
+    let targetRooms = roomsRef.current;
     if (rule.scope === 'building') {
-      targetRooms = rooms.filter((r) => r.building === rule.targetId || r.building.endsWith(rule.targetId));
+      targetRooms = targetRooms.filter((r) => r.building === rule.targetId || r.building.endsWith(rule.targetId));
     } else if (rule.scope === 'room') {
-      targetRooms = rooms.filter((r) => r.code === rule.targetId);
+      targetRooms = targetRooms.filter((r) => r.code === rule.targetId || r.id === rule.targetId);
     }
 
-    targetRooms.forEach((r) => {
+    for (const r of targetRooms) {
+      const code = r.code || r.id;
       if (rule.action === 'turn_off_all') {
-        supabaseService.updatePower(r.code, false);
+        await supabaseService.updatePower(code, false);
       } else if (rule.action === 'turn_on_ac') {
-        supabaseService.updateAc(r.code, true, 24, 'cool');
+        await supabaseService.updateAc(code, true, 24, 'cool');
       } else if (rule.action === 'turn_off_ac_proj') {
-        supabaseService.updateRoom(r.code, { ac_on: false, projector_on: false });
+        await supabaseService.updateRelayControl(code, {
+          relay3_maychieu: false,
+          relay4_dieuhoa: false,
+          auto_mode: false,
+        });
+        await supabaseService.updateRoom(code, { ac_on: false, projector_on: false });
+      } else if (rule.action === 'mode_study') {
+        await supabaseService.updateRelayControl(code, {
+          relay1_den: true,
+          relay2_quat: true,
+          auto_mode: false,
+        });
+        await supabaseService.updateRoom(code, {
+          power_on: true,
+          status: 'on',
+          light_on: true,
+          light_mode: 'study',
+          fan_on: true,
+        });
       }
-    });
+    }
+
+    const refreshed = await supabaseService.fetchRooms();
+    setRooms(refreshed);
 
     logActivity(
       isAuto
@@ -1082,13 +1345,20 @@ export default function App() {
   // CẬP NHẬT CÀI ĐẶT: ĐỌC/SỬA temp_threshold & smoke_threshold TRONG BẢNG 'settings' (id = 1)
   const handleUpdateSettings = async (newSettings: ThresholdSettings) => {
     setSettings(newSettings);
-    await supabaseService.updateSettings(newSettings.highTempThreshold, newSettings.smokeThreshold);
-    logActivity('Cập nhật ngưỡng cảnh báo hệ thống (bảng settings id=1)', 'SYSTEM', 'Cài đặt');
-    setDbSyncToast({
-      message: 'Đã lưu ngưỡng cảnh báo thành công vào bảng settings!',
-      type: 'success',
-    });
-    setTimeout(() => setDbSyncToast(null), 3000);
+    const ok = await supabaseService.updateSettings(newSettings.highTempThreshold, newSettings.smokeThreshold);
+    if (ok) {
+      logActivity('Cập nhật ngưỡng cảnh báo hệ thống (bảng settings id=1)', 'SYSTEM', 'Cài đặt');
+      setDbSyncToast({
+        message: 'Đã lưu ngưỡng cảnh báo thành công vào bảng settings!',
+        type: 'success',
+      });
+    } else {
+      setDbSyncToast({
+        message: 'Không thể lưu cài đặt vào bảng settings (kiểm tra quyền RLS)!',
+        type: 'error',
+      });
+    }
+    setTimeout(() => setDbSyncToast(null), 3500);
   };
 
   // ĐĂNG KÝ VÀ LƯU VÀO DATABASE SUPABASE (BẢNG PROFILES)
@@ -1097,6 +1367,7 @@ export default function App() {
       full_name: userData.full_name,
       role: userData.role,
       email: userData.email,
+      password: userData.password,
     });
     if (created) {
       setUsers((prev) => {
@@ -1142,10 +1413,16 @@ export default function App() {
     if (currentUser?.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
-    await supabaseService.updateProfile(updatedUser.id, {
+    const ok = await supabaseService.updateProfile(updatedUser.id, {
       full_name: updatedUser.name,
       role: updatedUser.role,
     });
+
+    if (!ok) {
+      const freshProfiles = await supabaseService.fetchProfiles();
+      setUsers(freshProfiles);
+      return;
+    }
 
     const msg = isPromoted
       ? `✓ Đã cấp quyền Quản trị viên (Admin) cho [${updatedUser.name}] và lưu vào Database!`
@@ -1165,7 +1442,12 @@ export default function App() {
     }
     const target = users.find((u) => u.id === userId);
     setUsers((prev) => prev.filter((u) => u.id !== userId));
-    await supabaseService.deleteProfile(userId);
+    const ok = await supabaseService.deleteProfile(userId);
+    if (!ok) {
+      const freshProfiles = await supabaseService.fetchProfiles();
+      setUsers(freshProfiles);
+      return;
+    }
     setDbSyncToast({ message: `Đã xóa tài khoản khỏi Database!`, type: 'success' });
     setTimeout(() => setDbSyncToast(null), 3500);
     if (target) {
@@ -1303,7 +1585,11 @@ export default function App() {
             supabaseStatus={supabaseStatus}
             timeInfo={timeInfo}
             onOpenTimeSyncModal={() => setIsTimeModalOpen(true)}
-            onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+            onOpenSchoolPowerModal={() => {
+              if (currentUser?.role === 'admin') {
+                setIsSchoolPowerModalOpen(true);
+              }
+            }}
             onOpenThemeModal={() => setIsThemeModalOpen(true)}
             poweredOnCount={rooms.filter((r) => r.status === 'on' || r.status === 'alert').length}
             onSyncDatabase={loadAllSupabaseData}
@@ -1376,6 +1662,7 @@ export default function App() {
                 currentUser={currentUser}
                 onBack={() => setSelectedRoomId(null)}
                 onUpdateRoom={handleUpdateRoom}
+                onToggleRelay={handleToggleRelay}
                 onEmergencyCut={handleEmergencyCut}
                 onTriggerSmokeForRoom={(code, autoCutPower) => {
                   handleTriggerFireAlarmForRoom(code, autoCutPower);
@@ -1392,6 +1679,7 @@ export default function App() {
                 {currentTab === 'dashboard' && (
                   <DashboardTab
                     rooms={rooms}
+                    currentUser={currentUser}
                     alerts={alerts}
                     activities={activities}
                     recentSensorLogs={recentSensorLogs}
@@ -1399,11 +1687,15 @@ export default function App() {
                     onNavigateToRooms={() => setCurrentTab('rooms')}
                     onTurnOffEmptyRooms={handleTurnOffEmptyRooms}
                     onResolveAlert={handleResolveAlert}
-                    onPushToDatabase={loadAllSupabaseData}
+                    onPushToDatabase={handlePushAllToDatabase}
                     onSyncAlerts={handleSyncAlerts}
                     onClearAllAlarms={handleClearAllAlarms}
                     isPushingDb={isPushingDb}
-                    onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+                    onOpenSchoolPowerModal={() => {
+                      if (currentUser?.role === 'admin') {
+                        setIsSchoolPowerModalOpen(true);
+                      }
+                    }}
                     dbRoomCount={rooms.length}
                   />
                 )}
@@ -1415,6 +1707,7 @@ export default function App() {
                     currentUser={currentUser}
                     onSelectRoom={(r) => setSelectedRoomId(r.code || r.id)}
                     onToggleRoomPower={handleToggleRoomPower}
+                    onToggleRelay={handleToggleRelay}
                     onTriggerSmoke={(roomId, e, isTrigger) => {
                       e.stopPropagation();
                       if (isTrigger === false) {
@@ -1423,12 +1716,16 @@ export default function App() {
                         handleTriggerFireAlarmForRoom(roomId, false);
                       }
                     }}
-                    onOpenSchoolPowerModal={() => setIsSchoolPowerModalOpen(true)}
+                    onOpenSchoolPowerModal={() => {
+                      if (currentUser?.role === 'admin') {
+                        setIsSchoolPowerModalOpen(true);
+                      }
+                    }}
                     onOpenAddRoomModal={currentUser?.role === 'admin' ? () => setIsAddRoomModalOpen(true) : undefined}
                     dbRoomCount={rooms.length}
-                    onPushToDatabase={loadAllSupabaseData}
+                    onPushToDatabase={handlePushAllToDatabase}
                     onFetchFromDatabase={loadAllSupabaseData}
-                    isSyncingDb={isLoading}
+                    isSyncingDb={isPushingDb || isLoading}
                     onDeleteRoom={currentUser?.role === 'admin' ? handleRequestDeleteRoom : undefined}
                   />
                 )}
@@ -1461,10 +1758,10 @@ export default function App() {
                     supabaseInfo={supabaseStatus}
                     roomsCount={rooms.length}
                     dbRoomCount={supabaseStatus.dbRoomCount}
-                    onPushToDatabase={loadAllSupabaseData}
+                    onPushToDatabase={handlePushAllToDatabase}
                     onFetchFromDatabase={loadAllSupabaseData}
                     onOpenSqlHelper={() => setIsSqlHelperModalOpen(true)}
-                    isPushingDb={isLoading}
+                    isPushingDb={isPushingDb || isLoading}
                     currentThemeId={currentThemeId}
                     customColor={customBgColor}
                     onSelectTheme={handleSelectTheme}
@@ -1510,21 +1807,35 @@ export default function App() {
             setTimeout(() => setDbSyncToast(null), 4000);
             return;
           }
-          await supabaseService.updateRoom(newRoom.id, {
+          const buildingCode = newRoom.building.includes('B') ? 'B' : newRoom.building.includes('C') ? 'C' : 'A';
+          const roomSaved = await supabaseService.updateRoom(newRoom.id, {
             code: newRoom.id,
             name: newRoom.name,
-            building: newRoom.building === 'Tòa B' ? 'B' : 'A',
-            power_on: false,
-            status: 'off',
+            building: buildingCode,
+            power_on: newRoom.isPowerOn,
+            status: newRoom.isPowerOn ? 'on' : 'off',
             temperature: 24,
             humidity: 60,
-            smoke_level: 25,
-            light_on: false,
-            ac_on: false,
+            smoke_level: 0,
+            light_on: newRoom.devices.light.isOn,
+            ac_on: newRoom.devices.ac.isOn,
             projector_on: false,
-            fan_on: false,
+            fan_on: newRoom.devices.fan.isOn,
+            flame: false,
+            relay_alarm: false,
           });
-          loadAllSupabaseData();
+          await supabaseService.updateRelayControl(newRoom.id, {
+            auto_mode: false,
+            relay1_den: newRoom.devices.light.isOn,
+            relay2_quat: newRoom.devices.fan.isOn,
+            relay3_maychieu: false,
+            relay4_dieuhoa: newRoom.devices.ac.isOn,
+            khan_cap: false,
+          });
+          if (roomSaved) {
+            logActivity(`Thêm phòng học mới [${newRoom.name}] vào Supabase`, newRoom.id, newRoom.name);
+            loadAllSupabaseData();
+          }
         }}
         existingRoomIds={rooms.map((r) => r.code || r.id)}
       />

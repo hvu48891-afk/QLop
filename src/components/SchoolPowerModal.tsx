@@ -250,9 +250,13 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
           {(poweredOnCount < totalRooms || emergencyCutRooms.length > 0) ? (
             <button
               onClick={handleExecuteRestore}
-              disabled={isProcessing}
-              title="Khôi phục lại nguồn điện an toàn cho tất cả phòng học"
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+              disabled={isProcessing || !isAdmin}
+              title={isAdmin ? "Khôi phục lại nguồn điện an toàn cho tất cả phòng học" : "Chỉ Quản trị viên (Admin) mới có quyền khôi phục nguồn điện toàn trường"}
+              className={`w-full sm:w-auto px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                isAdmin && !isProcessing
+                  ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/40 text-emerald-300 active:scale-95 cursor-pointer shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-900/50 border-slate-800 text-slate-500 opacity-40 cursor-not-allowed select-none'
+              }`}
             >
               <RotateCcw className="w-4 h-4" />
               <span>Khôi phục điện toàn trường</span>

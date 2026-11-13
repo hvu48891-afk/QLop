@@ -27,13 +27,15 @@ import {
   Radio,
   Thermometer,
   Droplets,
-  Cpu
+  Cpu,
+  Lock
 } from 'lucide-react';
-import { Room, AlertLog, ActivityLog, DbSensorData } from '../types';
+import { Room, AlertLog, ActivityLog, DbSensorData, User } from '../types';
 import { parseAirQuality } from '../utils/airQuality';
 
 interface DashboardTabProps {
   rooms: Room[];
+  currentUser?: User | null;
   alerts: AlertLog[];
   activities: ActivityLog[];
   recentSensorLogs?: DbSensorData[];
@@ -51,6 +53,7 @@ interface DashboardTabProps {
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
   rooms,
+  currentUser,
   alerts,
   activities,
   recentSensorLogs = [],
@@ -65,6 +68,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onOpenSchoolPowerModal,
   dbRoomCount,
 }) => {
+  const isAdmin = currentUser?.role === 'admin';
   // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
   const [alertViewMode, setAlertViewMode] = useState<'unresolved' | 'resolved'>('unresolved');
 
@@ -236,15 +240,26 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </button>
           )}
 
-          {/* Button Tắt điện toàn trường */}
+          {/* Button Tắt điện toàn trường (Cầu dao tổng) */}
           {onOpenSchoolPowerModal && (
             <button
-              onClick={onOpenSchoolPowerModal}
-              title="Mở bảng điều khiển tắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 text-xs font-semibold transition-all flex items-center gap-1.5 shadow-md"
+              type="button"
+              onClick={isAdmin ? onOpenSchoolPowerModal : undefined}
+              disabled={!isAdmin}
+              title={
+                isAdmin
+                  ? "Cầu dao tổng: Mở bảng điều khiển cắt/tắt điện toàn trường (Quản trị viên)"
+                  : "Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng toàn trường!"
+              }
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md ${
+                isAdmin
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border border-red-400 text-white shadow-red-600/25 ring-2 ring-red-400/50 active:scale-95 cursor-pointer animate-pulse'
+                  : 'bg-slate-900/50 border border-slate-800 text-slate-500 opacity-40 cursor-not-allowed select-none'
+              }`}
             >
-              <ZapOff className="w-3.5 h-3.5 text-amber-400" />
-              <span>Tắt điện toàn trường ({poweredOnRooms})</span>
+              <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-yellow-300 stroke-[2.5]' : 'text-slate-600'}`} />
+              <span>Cầu dao tổng trường ({poweredOnRooms})</span>
+              {!isAdmin && <Lock className="w-3 h-3 text-slate-500 ml-0.5" />}
             </button>
           )}
 

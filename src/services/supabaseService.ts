@@ -7,6 +7,7 @@ import { supabase, SUPABASE_URL } from '../lib/supabase';
 import { 
   Room, 
   DbRoom, 
+  DbRelayControl,
   DbSensorData,
   DbAlert, 
   DbSchedule, 
@@ -261,6 +262,7 @@ class SupabaseService {
    * Helper chuyển đổi DbSchedule sang ScheduleRule
    */
   public mapDbScheduleToRule(row: DbSchedule): ScheduleRule {
+    const cleanTime = String(row.run_time || '17:30').slice(0, 5);
     return {
       id: String(row.id),
       title: row.name,
@@ -269,10 +271,10 @@ class SupabaseService {
       targetId: row.target || 'all',
       targetName: row.target === 'all' ? 'Toàn trường' : `Tòa/Phòng ${row.target}`,
       action: row.action || 'turn_off_all',
-      time: row.run_time || '17:30',
+      time: cleanTime,
       daysOfWeek: Array.isArray(row.days) ? row.days : [1, 2, 3, 4, 5, 6],
       isEnabled: Boolean(row.enabled),
-      description: `Quy tắc ${row.name} thực thi lúc ${row.run_time}`,
+      description: `Quy tắc ${row.name} thực thi lúc ${cleanTime}`,
     };
   }
 
@@ -356,10 +358,142 @@ class SupabaseService {
         console.warn('[Supabase fetchRooms] Không đọc được sensor_data:', sensorErr);
       }
 
+      // Nạp kèm trạng thái điều khiển rơ-le từ bảng relay_control
+      try {
+        const relayControls = await this.fetchRelayControls();
+        if (relayControls && relayControls.length > 0) {
+          roomsList = roomsList.map((room) => {
+            const matchedRc = relayControls.find((rc) => rc.room_code === room.code);
+            return matchedRc ? this.mergeRelayControlToRoom(room, matchedRc) : room;
+          });
+        }
+      } catch (rcErr) {
+        console.warn('[Supabase fetchRooms] Không đọc được relay_control:', rcErr);
+      }
+
       return roomsList;
     } catch (err: any) {
       console.error('[Supabase fetchRooms] Thất bại khi đọc bảng rooms:', err);
       return DEFAULT_DB_ROOMS.map((row) => this.mapDbRoomToRoom(row));
+    }
+  }
+
+  /**
+   * Đọc bảng relay_control (bảng lệnh điều khiển & phản hồi phần cứng ESP32)
+   */
+  public async fetchRelayControls(): Promise<DbRelayControl[]> {
+    try {
+      const { data, error } = await supabase
+        .from('relay_control')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('[Supabase fetchRelayControls] Lỗi đọc relay_control:', error.message);
+        return [];
+      }
+      return (data as DbRelayControl[]) || [];
+    } catch (err) {
+      console.error('[Supabase fetchRelayControls] Ngoại lệ:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Gắn dữ liệu từ bảng relay_control vào Room trên giao diện
+   */
+  public mergeRelayControlToRoom(room: Room, rc: DbRelayControl): Room {
+    return {
+      ...room,
+      relayControl: rc,
+      relayAlarm: rc.khan_cap || room.relayAlarm,
+      devices: {
+        ...room.devices,
+        light: {
+          ...room.devices.light,
+          isOn: Boolean(rc.relay1_den),
+          brightness: rc.relay1_den ? (room.devices.light.brightness || 85) : 0,
+          preset: rc.relay1_den ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
+        },
+        fan: {
+          ...room.devices.fan,
+          isOn: Boolean(rc.relay2_quat),
+          speed: rc.relay2_quat ? (room.devices.fan.speed || 2) : 0,
+        },
+        projector: {
+          ...room.devices.projector,
+          isOn: Boolean(rc.relay3_maychieu),
+        },
+        ac: {
+          ...room.devices.ac,
+          isOn: Boolean(rc.relay4_dieuhoa),
+        },
+      },
+    };
+  }
+
+  /**
+   * Cập nhật trực tiếp bảng relay_control theo room_code
+   */
+  public async updateRelayControl(
+    code: string,
+    fields: Partial<DbRelayControl>
+  ): Promise<{ success: boolean; row: DbRelayControl | null; error?: string }> {
+    try {
+      const payload = {
+        ...fields,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('relay_control')
+        .update(payload)
+        .eq('room_code', code)
+        .select();
+
+      if (error) {
+        console.error(`[Supabase updateRelayControl] Lỗi cập nhật relay_control (${code}):`, error.message);
+        this.notifyWriteEvent({
+          table: 'relay_control',
+          code,
+          action: `Cập nhật relay_control (${code})`,
+          success: false,
+          error: error.message,
+        });
+        return { success: false, row: null, error: error.message };
+      }
+
+      if (data && data.length > 0) {
+        return { success: true, row: data[0] as DbRelayControl };
+      }
+
+      // Nếu chưa có dòng cho room_code này trong relay_control, tự động insert mới
+      const insertPayload = {
+        room_code: code,
+        auto_mode: fields.auto_mode ?? false,
+        relay1_den: fields.relay1_den ?? false,
+        relay2_quat: fields.relay2_quat ?? false,
+        relay3_maychieu: fields.relay3_maychieu ?? false,
+        relay4_dieuhoa: fields.relay4_dieuhoa ?? false,
+        khan_cap: fields.khan_cap ?? false,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: insData, error: insErr } = await supabase
+        .from('relay_control')
+        .insert([insertPayload])
+        .select()
+        .single();
+
+      if (insErr) {
+        console.error(`[Supabase updateRelayControl] Lỗi tạo dòng relay_control (${code}):`, insErr.message);
+        return { success: false, row: null, error: insErr.message };
+      }
+
+      return { success: true, row: (insData as DbRelayControl) || null };
+    } catch (err: any) {
+      console.error(`[Supabase updateRelayControl] Ngoại lệ (${code}):`, err);
+      return { success: false, row: null, error: err?.message || 'Lỗi ngoại lệ mạng Supabase' };
     }
   }
 
@@ -406,33 +540,69 @@ class SupabaseService {
       updatedAt: sensor.created_at || new Date().toISOString(),
       lastUpdated: 'Trực tuyến (Sensor)',
       isDisconnected: false,
-      devices: {
-        ...room.devices,
-        light: {
-          ...room.devices.light,
-          isOn: Boolean(sensor.relay1_den),
-        },
-        fan: {
-          ...room.devices.fan,
-          isOn: Boolean(sensor.relay2_quat),
-        },
-        projector: {
-          ...room.devices.projector,
-          isOn: Boolean(sensor.relay3_maychieu),
-        },
-        ac: {
-          ...room.devices.ac,
-          isOn: Boolean(sensor.relay4_dieuhoa),
-        },
-      },
     };
   }
 
   /**
-   * Điều khiển Rèm cửa thông minh (cột curtain trong bảng rooms)
+   * Điều khiển trực tiếp 4 kênh Relay + Relay Còi Báo Động + Auto Mode + Khẩn cấp
+   * Ghi đồng bộ vào cả bảng relay_control (mạch ESP32 đọc) và bảng rooms của Supabase
    */
-  public async updateCurtain(code: string, curtain: 'open' | 'close' | 'stop'): Promise<boolean> {
-    return this.updateRoom(code, { curtain } as any);
+  public async toggleRelay(
+    code: string,
+    relayType: 'relay1_den' | 'relay2_quat' | 'relay3_maychieu' | 'relay4_dieuhoa' | 'relay_alarm' | 'power_on' | 'auto_mode' | 'khan_cap',
+    state: boolean
+  ): Promise<{ roomUpdated: boolean; relayControlRow: DbRelayControl | null }> {
+    const roomPayloadMap: Record<string, Partial<DbRoom> | null> = {
+      relay1_den: { light_on: state, light_mode: state ? 'study' : 'off' },
+      relay2_quat: { fan_on: state },
+      relay3_maychieu: { projector_on: state },
+      relay4_dieuhoa: { ac_on: state },
+      relay_alarm: { relay_alarm: state },
+      khan_cap: { relay_alarm: state },
+      auto_mode: null,
+      power_on: {
+        power_on: state,
+        status: state ? 'on' : 'off',
+        ...(state ? {} : { light_on: false, ac_on: false, projector_on: false, fan_on: false }),
+      },
+    };
+
+    const rcPayloadMap: Record<string, Partial<DbRelayControl> | null> = {
+      relay1_den: { relay1_den: state, auto_mode: false },
+      relay2_quat: { relay2_quat: state, auto_mode: false },
+      relay3_maychieu: { relay3_maychieu: state, auto_mode: false },
+      relay4_dieuhoa: { relay4_dieuhoa: state, auto_mode: false },
+      relay_alarm: { khan_cap: state },
+      khan_cap: { khan_cap: state },
+      auto_mode: { auto_mode: state },
+      power_on: state
+        ? null
+        : {
+            relay1_den: false,
+            relay2_quat: false,
+            relay3_maychieu: false,
+            relay4_dieuhoa: false,
+            auto_mode: false,
+          },
+    };
+
+    const rcPayload = rcPayloadMap[relayType];
+    const roomPayload = roomPayloadMap[relayType];
+
+    let relayControlRow: DbRelayControl | null = null;
+    let rcSuccess = true;
+    if (rcPayload) {
+      const rcRes = await this.updateRelayControl(code, rcPayload);
+      rcSuccess = rcRes.success;
+      relayControlRow = rcRes.row;
+    }
+
+    let roomUpdated = true;
+    if (roomPayload) {
+      roomUpdated = await this.updateRoom(code, roomPayload);
+    }
+
+    return { roomUpdated: rcSuccess && roomUpdated, relayControlRow };
   }
 
   /**
@@ -443,15 +613,18 @@ class SupabaseService {
   }
 
   /**
-   * Đẩy toàn bộ dữ liệu phòng học lên bảng rooms của Supabase
+   * Đẩy toàn bộ dữ liệu phòng học lên bảng rooms và relay_control của Supabase
    */
   public async syncAllToDatabase(rooms: Room[]): Promise<{ success: boolean; error?: string }> {
     try {
-      const dbRows = rooms.map((r, index) => ({
-        id: index + 1,
+      if (!rooms || rooms.length === 0) {
+        return { success: true };
+      }
+
+      const dbRows = rooms.map((r) => ({
         code: r.code || r.id,
         name: r.name,
-        building: r.building.includes('B') ? 'B' : 'A',
+        building: r.building.includes('B') ? 'B' : r.building.includes('C') ? 'C' : 'A',
         status: r.status,
         temperature: r.temperature,
         humidity: r.humidity,
@@ -464,17 +637,47 @@ class SupabaseService {
         ac_mode: r.devices.ac.mode,
         projector_on: r.devices.projector.isOn,
         fan_on: r.devices.fan.isOn,
+        air_quality: r.airQuality,
+        flame: r.flame,
+        relay_alarm: r.relayAlarm,
         updated_at: new Date().toISOString(),
       }));
 
       const { error } = await supabase.from('rooms').upsert(dbRows, { onConflict: 'code' });
       if (error) {
         console.error('[Supabase syncAllToDatabase] Lỗi:', error.message);
-        this.status.rlsRestricted = true;
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.status.rlsRestricted = isRls;
+        this.notifyWriteEvent({
+          table: 'rooms',
+          action: 'Đồng bộ tất cả phòng lên DB',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return { success: false, error: error.message };
       }
+
+      // Đồng bộ kèm bảng relay_control cho từng phòng
+      for (const r of rooms) {
+        const code = r.code || r.id;
+        await this.updateRelayControl(code, {
+          auto_mode: r.relayControl?.auto_mode ?? false,
+          relay1_den: r.devices.light.isOn,
+          relay2_quat: r.devices.fan.isOn,
+          relay3_maychieu: r.devices.projector.isOn,
+          relay4_dieuhoa: r.devices.ac.isOn,
+          khan_cap: r.relayAlarm,
+        });
+      }
+
       this.status.rlsRestricted = false;
       this.status.dbRoomCount = dbRows.length;
+      this.notifyWriteEvent({
+        table: 'rooms',
+        action: `Đồng bộ ${dbRows.length} phòng lên Database`,
+        success: true,
+      });
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e?.message };
@@ -588,20 +791,31 @@ class SupabaseService {
    */
   public async testWriteAccess(): Promise<{ canWrite: boolean; rlsRestricted: boolean; error?: string }> {
     try {
-      const testPayload = {
-        updated_at: new Date().toISOString(),
-      };
-      const { error } = await supabase
+      const nowIso = new Date().toISOString();
+      const { error: roomErr } = await supabase
         .from('rooms')
-        .update(testPayload)
+        .update({ updated_at: nowIso })
         .eq('code', 'A201')
         .select();
 
-      if (error) {
-        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+      if (roomErr) {
+        const isRls = roomErr.code === '42501' || roomErr.message.toLowerCase().includes('row-level security');
         this.status.rlsRestricted = isRls;
-        this.status.error = error.message;
-        return { canWrite: false, rlsRestricted: isRls, error: error.message };
+        this.status.error = roomErr.message;
+        return { canWrite: false, rlsRestricted: isRls, error: roomErr.message };
+      }
+
+      const { error: rcErr } = await supabase
+        .from('relay_control')
+        .update({ updated_at: nowIso })
+        .eq('room_code', 'A201')
+        .select();
+
+      if (rcErr) {
+        const isRls = rcErr.code === '42501' || rcErr.message.toLowerCase().includes('row-level security');
+        this.status.rlsRestricted = isRls;
+        this.status.error = rcErr.message;
+        return { canWrite: false, rlsRestricted: isRls, error: rcErr.message };
       }
 
       this.status.rlsRestricted = false;
@@ -613,42 +827,55 @@ class SupabaseService {
   }
 
   /**
-   * Cập nhật điều khiển Đèn: light_on, light_mode
+   * Cập nhật điều khiển Đèn: light_on, light_mode (cả rooms và relay_control)
    */
   public async updateLight(code: string, light_on: boolean, light_mode?: LightPreset): Promise<boolean> {
     const payload: Partial<DbRoom> = { light_on };
     if (light_mode) payload.light_mode = light_mode;
+    await this.updateRelayControl(code, { relay1_den: light_on, auto_mode: false });
     return this.updateRoom(code, payload);
   }
 
   /**
-   * Cập nhật điều khiển Điều hòa: ac_on, ac_temp, ac_mode
+   * Cập nhật điều khiển Điều hòa: ac_on, ac_temp, ac_mode (cả rooms và relay_control)
    */
   public async updateAc(code: string, ac_on: boolean, ac_temp?: number, ac_mode?: AcMode): Promise<boolean> {
     const payload: Partial<DbRoom> = { ac_on };
     if (ac_temp !== undefined) payload.ac_temp = ac_temp;
     if (ac_mode) payload.ac_mode = ac_mode;
+    await this.updateRelayControl(code, { relay4_dieuhoa: ac_on, auto_mode: false });
     return this.updateRoom(code, payload);
   }
 
   /**
-   * Cập nhật điều khiển Máy chiếu: projector_on
+   * Cập nhật điều khiển Máy chiếu: projector_on (cả rooms và relay_control)
    */
   public async updateProjector(code: string, projector_on: boolean): Promise<boolean> {
+    await this.updateRelayControl(code, { relay3_maychieu: projector_on, auto_mode: false });
     return this.updateRoom(code, { projector_on });
   }
 
   /**
-   * Cập nhật điều khiển Quạt: fan_on
+   * Cập nhật điều khiển Quạt: fan_on (cả rooms và relay_control)
    */
   public async updateFan(code: string, fan_on: boolean): Promise<boolean> {
+    await this.updateRelayControl(code, { relay2_quat: fan_on, auto_mode: false });
     return this.updateRoom(code, { fan_on });
   }
 
   /**
-   * Cập nhật Công tắc Điện phòng / Cắt điện khẩn cấp: power_on
+   * Cập nhật Công tắc Điện phòng / Cắt điện khẩn cấp: power_on (cả rooms và relay_control)
    */
   public async updatePower(code: string, power_on: boolean): Promise<boolean> {
+    if (!power_on) {
+      await this.updateRelayControl(code, {
+        relay1_den: false,
+        relay2_quat: false,
+        relay3_maychieu: false,
+        relay4_dieuhoa: false,
+        auto_mode: false,
+      });
+    }
     return this.updateRoom(code, {
       power_on,
       status: power_on ? 'on' : 'off',
@@ -658,7 +885,7 @@ class SupabaseService {
   }
 
   /**
-   * Cập nhật trạng thái alert / báo cháy của phòng học
+   * Cập nhật trạng thái alert / báo cháy của phòng học (cả rooms và relay_control.khan_cap)
    */
   public async setRoomAlert(
     code: string, 
@@ -685,6 +912,8 @@ class SupabaseService {
       await this.clearAlertsForRoom(code);
     }
 
+    await this.updateRelayControl(code, { khan_cap: isAlert });
+
     return this.updateRoom(code, {
       status: isAlert ? 'alert' : powerOnState ? 'on' : 'off',
       smoke_level: level,
@@ -706,7 +935,14 @@ class SupabaseService {
         console.warn(`[Supabase deleteRoom] Không thể xóa alerts phòng ${code}:`, alertErr);
       }
 
-      // 2. Xóa phòng khỏi bảng rooms
+      // 2. Xóa cấu hình rơ-le liên quan trong bảng relay_control
+      try {
+        await supabase.from('relay_control').delete().eq('room_code', code);
+      } catch (rcErr) {
+        console.warn(`[Supabase deleteRoom] Không thể xóa relay_control phòng ${code}:`, rcErr);
+      }
+
+      // 3. Xóa phòng khỏi bảng rooms
       const { error } = await supabase
         .from('rooms')
         .delete()
@@ -897,10 +1133,10 @@ class SupabaseService {
       if (data && data.length > 0) {
         return data.map((row: DbSchedule) => this.mapDbScheduleToRule(row));
       }
-      return DEFAULT_DB_SCHEDULES.map((row) => this.mapDbScheduleToRule(row));
+      return [];
     } catch (err) {
       console.error('[Supabase fetchSchedules] Ngoại lệ tải schedules:', err);
-      return DEFAULT_DB_SCHEDULES.map((row) => this.mapDbScheduleToRule(row));
+      return [];
     }
   }
 
@@ -916,10 +1152,23 @@ class SupabaseService {
 
       if (error) {
         console.error('[Supabase toggleScheduleEnabled] Lỗi đổi trạng thái schedule:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'schedules',
+          action: 'Cập nhật lịch tự động',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return false;
       }
+      this.notifyWriteEvent({
+        table: 'schedules',
+        action: `${enabled ? 'Bật' : 'Tắt'} lịch tự động`,
+        success: true,
+      });
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Supabase toggleScheduleEnabled] Ngoại lệ schedule toggle:', err);
       return false;
     }
@@ -938,8 +1187,21 @@ class SupabaseService {
 
       if (error) {
         console.error('[Supabase insertSchedule] Lỗi thêm schedule:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'schedules',
+          action: `Thêm lịch "${rule.name}"`,
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return null;
       }
+      this.notifyWriteEvent({
+        table: 'schedules',
+        action: `Đã lưu lịch "${rule.name}" vào Database`,
+        success: true,
+      });
       return data ? this.mapDbScheduleToRule(data) : null;
     } catch (err) {
       console.error('[Supabase insertSchedule] Ngoại lệ insert schedule:', err);
@@ -959,8 +1221,21 @@ class SupabaseService {
 
       if (error) {
         console.error('[Supabase updateSchedule] Lỗi cập nhật schedule:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'schedules',
+          action: 'Cập nhật quy tắc lập lịch',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return false;
       }
+      this.notifyWriteEvent({
+        table: 'schedules',
+        action: 'Cập nhật quy tắc lập lịch',
+        success: true,
+      });
       return true;
     } catch (err) {
       console.error('[Supabase updateSchedule] Ngoại lệ update schedule:', err);
@@ -980,8 +1255,21 @@ class SupabaseService {
 
       if (error) {
         console.error('[Supabase deleteSchedule] Lỗi xóa schedule:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'schedules',
+          action: 'Xóa quy tắc lập lịch',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return false;
       }
+      this.notifyWriteEvent({
+        table: 'schedules',
+        action: 'Đã xóa quy tắc khỏi Database',
+        success: true,
+      });
       return true;
     } catch (err) {
       console.error('[Supabase deleteSchedule] Ngoại lệ delete schedule:', err);
@@ -1035,12 +1323,26 @@ class SupabaseService {
           id: 1,
           temp_threshold,
           smoke_threshold,
-        });
+        })
+        .select();
 
       if (error) {
         console.error('[Supabase updateSettings] Lỗi cập nhật settings (id=1):', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'settings',
+          action: 'Lưu ngưỡng cài đặt (settings)',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return false;
       }
+      this.notifyWriteEvent({
+        table: 'settings',
+        action: `Lưu ngưỡng Nhiệt ${temp_threshold}°C / Khói ${smoke_threshold} ppm`,
+        success: true,
+      });
       return true;
     } catch (err) {
       console.error('[Supabase updateSettings] Ngoại lệ update settings:', err);
@@ -1192,21 +1494,22 @@ class SupabaseService {
 
       if (insertError) {
         console.warn('[Supabase insertProfile] Lỗi upsert profiles:', insertError.message);
-        const isFkOrRls = insertError.code === '23503' || insertError.code === '42501' || insertError.message.toLowerCase().includes('foreign key');
+        const isFkOrRls = insertError.code === '23503' || insertError.code === '42501' || insertError.message.toLowerCase().includes('foreign key') || insertError.message.toLowerCase().includes('row-level security');
         this.notifyWriteEvent({
           table: 'profiles',
           action: `Lưu tài khoản [${user.full_name}]`,
           success: false,
           rlsError: isFkOrRls,
-          error: isFkOrRls ? 'Bảng profiles đang bị chặn bởi khóa ngoại. Bấm "Mở quyền SQL" để chạy lệnh mở khóa!' : insertError.message,
+          error: isFkOrRls ? 'Bảng profiles đang bị chặn bởi khóa ngoại hoặc RLS. Bấm "Mở quyền SQL" để chạy lệnh mở khóa!' : insertError.message,
         });
-      } else {
-        this.notifyWriteEvent({
-          table: 'profiles',
-          action: `Đã lưu tài khoản [${user.full_name}] (${user.role}) vào Database Supabase`,
-          success: true,
-        });
+        return null;
       }
+
+      this.notifyWriteEvent({
+        table: 'profiles',
+        action: `Đã lưu tài khoản [${user.full_name}] (${user.role}) vào Database Supabase`,
+        success: true,
+      });
 
       const finalId = (insertedData && insertedData.id) || targetId;
       return {
@@ -1236,6 +1539,14 @@ class SupabaseService {
 
       if (error) {
         console.error('[Supabase updateProfile] Lỗi cập nhật profile:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'profiles',
+          action: 'Cập nhật tài khoản',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return false;
       }
       this.notifyWriteEvent({
@@ -1262,6 +1573,14 @@ class SupabaseService {
 
       if (error) {
         console.error('[Supabase deleteProfile] Lỗi xóa profile:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'profiles',
+          action: 'Xóa tài khoản',
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return false;
       }
       this.notifyWriteEvent({
@@ -1284,12 +1603,15 @@ class SupabaseService {
    * Thiết lập Realtime Channel cho bảng 'rooms' và 'alerts'
    */
   /**
-   * Thiết lập Realtime Channel cho bảng 'rooms', 'sensor_data' và 'alerts'
+   * Thiết lập Realtime Channel cho bảng 'rooms', 'relay_control', 'sensor_data' và 'alerts'
    */
   public subscribeRealtime(
     onRoomChange: (updatedRoom: Room) => void,
     onAlertChange: (newAlert: AlertLog) => void,
-    onSensorDataChange?: (sensor: DbSensorData) => void
+    onSensorDataChange?: (sensor: DbSensorData) => void,
+    onRelayControlChange?: (rc: DbRelayControl) => void,
+    onSchedulesChange?: () => void,
+    onSettingsChange?: () => void
   ) {
     try {
       const channel = supabase
@@ -1301,6 +1623,15 @@ class SupabaseService {
             if (payload.new) {
               const mapped = this.mapDbRoomToRoom(payload.new as DbRoom);
               onRoomChange(mapped);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'relay_control' },
+          (payload) => {
+            if (payload.new) {
+              onRelayControlChange?.(payload.new as DbRelayControl);
             }
           }
         )
@@ -1327,6 +1658,20 @@ class SupabaseService {
                 onAlertChange(mappedAlert);
               }
             }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'schedules' },
+          () => {
+            onSchedulesChange?.();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'settings' },
+          () => {
+            onSettingsChange?.();
           }
         )
         .subscribe((status) => {

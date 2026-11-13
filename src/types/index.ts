@@ -60,7 +60,7 @@ export interface Room {
   smokeLevel: number; // ppm (0 - 1000)
   temperature: number; // °C
   humidity: number; // %
-  curtain: CurtainState; // 'open' | 'close' | 'stop' (từ cột curtain)
+  curtain?: CurtainState; // Cột curtain trong database
   airQuality: AirQualityState; // 'tot' | 'trung_binh' | 'kem' (từ cột air_quality)
   flame: boolean; // Cảm biến lửa (từ cột flame)
   relayAlarm: boolean; // Relay còi báo động (từ cột relay_alarm)
@@ -69,6 +69,25 @@ export interface Room {
   lastUpdated: string;
   updatedAt: string;
   isDisconnected?: boolean; // Nếu updated_at cũ hơn 30 giây
+  relayControl?: DbRelayControl; // Dữ liệu bảng relay_control
+}
+
+// Supabase Database Row Types (Khớp 100% chính xác cấu trúc bảng relay_control)
+export interface DbRelayControl {
+  id: number;
+  room_code: string;
+  auto_mode: boolean;
+  relay1_den: boolean;
+  relay2_quat: boolean;
+  relay3_maychieu: boolean;
+  relay4_dieuhoa: boolean;
+  updated_at: string;
+  state_relay1_den: boolean;
+  state_relay2_quat: boolean;
+  state_relay3_maychieu: boolean;
+  state_relay4_dieuhoa: boolean;
+  khan_cap: boolean;
+  state_updated_at?: string;
 }
 
 // Supabase Database Row Types (Khớp 100% chính xác cấu trúc bảng rooms thực tế)

@@ -19,7 +19,8 @@ import {
   FastForward,
   RefreshCw,
   Database,
-  Palette
+  Palette,
+  Lock
 } from 'lucide-react';
 import { User, TabType } from '../types';
 
@@ -63,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
     const updateTime = () => {
@@ -184,23 +186,36 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Master School-wide Power Cut Button */}
+        {/* Master School-wide Power Cut Button (Sáng khi ở Admin, các cấp quyền khác thì không nhấn được) */}
         {onOpenSchoolPowerModal && (
           <button
-            onClick={onOpenSchoolPowerModal}
-            title="Mở bảng điều khiển cắt điện toàn trường (Cầu dao tổng tất cả các tòa)"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
-              poweredOnCount > 0
-                ? 'bg-red-950/40 hover:bg-red-900/60 border-red-500/40 text-red-200 shadow-sm'
-                : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-slate-500'
+            type="button"
+            onClick={isAdmin ? onOpenSchoolPowerModal : undefined}
+            disabled={!isAdmin}
+            title={
+              isAdmin
+                ? "Cầu dao tổng trường: Bảng điều khiển cắt điện toàn trường (Quản trị viên)"
+                : "Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng trường!"
+            }
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+              isAdmin
+                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white border-red-400 shadow-lg shadow-red-600/35 ring-2 ring-red-400/60 cursor-pointer active:scale-95 animate-pulse'
+                : 'bg-slate-950/70 border-slate-800/80 text-slate-500 opacity-40 cursor-not-allowed select-none'
             }`}
           >
-            <ZapOff className={`w-3.5 h-3.5 ${poweredOnCount > 0 ? 'text-red-400' : 'text-slate-500'}`} />
+            <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-yellow-300 stroke-[2.5] drop-shadow' : 'text-slate-600'}`} />
             <span className="hidden sm:inline">Cầu dao tổng trường</span>
             <span className="sm:hidden">Cầu dao</span>
-            {poweredOnCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-red-900/80 border border-red-500/40 text-[10px] font-bold text-red-200 ml-0.5">
-                {poweredOnCount}
+            {isAdmin ? (
+              poweredOnCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-black/40 border border-white/30 text-[10px] font-black text-yellow-300 ml-0.5">
+                  {poweredOnCount}
+                </span>
+              )
+            ) : (
+              <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono ml-0.5">
+                <Lock className="w-3 h-3 text-slate-500" />
+                <span className="hidden md:inline">(Khóa)</span>
               </span>
             )}
           </button>

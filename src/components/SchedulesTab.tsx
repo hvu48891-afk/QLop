@@ -105,7 +105,7 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
     if (formScope === 'building') {
       targetName = formTargetId;
     } else if (formScope === 'room') {
-      const rm = rooms.find((r) => r.id === formTargetId);
+      const rm = rooms.find((r) => (r.code || r.id) === formTargetId);
       targetName = rm ? rm.name : formTargetId;
     }
 
@@ -229,6 +229,22 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
       {/* ================= VIEW 1: RULES LIST ================= */}
       {viewMode === 'rules' && (
         <div className="space-y-3.5">
+          {rules.length === 0 && (
+            <div className="text-center py-12 px-4 rounded-3xl bg-slate-900/60 border border-slate-800 space-y-3">
+              <CalendarClock className="w-10 h-10 text-slate-600 mx-auto" />
+              <h4 className="font-bold text-white text-sm">Chưa có quy tắc nào trong bảng schedules của Database</h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Mọi quy tắc bạn tạo sẽ được lưu trực tiếp vào bảng <code className="text-orange-300">schedules</code> trên Supabase và tự động thực thi đúng giờ.
+              </p>
+              <button
+                onClick={handleOpenCreateModal}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs transition-transform active:scale-95"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Tạo Quy tắc đầu tiên</span>
+              </button>
+            </div>
+          )}
           {rules.map((rule) => {
             return (
               <div
@@ -487,7 +503,7 @@ export const SchedulesTab: React.FC<SchedulesTabProps> = ({
                       className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-orange-500"
                     >
                       {rooms.map((r) => (
-                        <option key={r.id} value={r.id}>
+                        <option key={r.code || r.id} value={r.code || r.id}>
                           {r.name} ({r.building})
                         </option>
                       ))}

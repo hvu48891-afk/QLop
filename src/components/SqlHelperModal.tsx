@@ -32,6 +32,8 @@ export const SqlHelperModal: React.FC<SqlHelperModalProps> = ({
 
 -- 1. TẮT RLS ĐỂ WEB & PHẦN CỨNG TOÀN QUYỀN ĐỌC GHI (KHUYÊN DÙNG)
 ALTER TABLE IF EXISTS public.rooms DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.relay_control DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.sensor_data DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.alerts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.schedules DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.settings DISABLE ROW LEVEL SECURITY;
@@ -49,6 +51,12 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 -- 4. NẾU MUỐN BẬT RLS, TẠO POLICY MỞ CHO TẤT CẢ:
 DROP POLICY IF EXISTS "Public access rooms" ON public.rooms;
 CREATE POLICY "Public access rooms" ON public.rooms FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access relay_control" ON public.relay_control;
+CREATE POLICY "Public access relay_control" ON public.relay_control FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public access sensor_data" ON public.sensor_data;
+CREATE POLICY "Public access sensor_data" ON public.sensor_data FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public access alerts" ON public.alerts;
 CREATE POLICY "Public access alerts" ON public.alerts FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
