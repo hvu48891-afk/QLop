@@ -38,22 +38,12 @@ export function parseAirQuality(raw?: string | null): ParsedAirQuality {
   const co2 = co2Match ? parseFloat(co2Match[1]) : (str.toLowerCase().includes('tot') ? 450 : 800);
   const co = coMatch ? parseFloat(coMatch[1]) : (str.toLowerCase().includes('tot') ? 15 : 45);
 
-  // CO safe threshold: < 50 ppm is normal, >= 50 ppm requires attention, >= 100 ppm is critical
-  const isCoAlert = co >= 100;
+  // Khí CO và CO2 chỉ hiển thị thông số đo thực tế, không bật cảnh báo
+  const isCoAlert = false;
+  const isCo2Alert = false;
 
-  // CO2 safe threshold in classroom: < 1000 ppm is fresh, 1000-1400 ppm moderate, >= 1400 ppm poor (stuffy/drowsy)
-  const isCo2Alert = co2 >= 1400;
-
-  let overallStatus: 'good' | 'moderate' | 'poor' = 'good';
-  let overallStatusText = 'Đạt chuẩn';
-
-  if (co >= 100 || co2 >= 1400) {
-    overallStatus = 'poor';
-    overallStatusText = 'Kém (Cần thông gió)';
-  } else if (co >= 50 || co2 >= 1000) {
-    overallStatus = 'moderate';
-    overallStatusText = 'Trung bình';
-  }
+  const overallStatus: 'good' | 'moderate' | 'poor' = 'good';
+  const overallStatusText = 'Bình thường';
 
   return {
     co,

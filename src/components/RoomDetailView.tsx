@@ -25,7 +25,6 @@ import {
   Share2,
   ShieldAlert,
   Trash2,
-  Siren,
   Bell,
   ShieldCheck,
   ZapOff,
@@ -72,6 +71,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   soundEnabled,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
+  const isMasterPowerCut = !room.isPowerOn || room.emergencyPowerCut;
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [autoCutPowerOnFire, setAutoCutPowerOnFire] = useState(true);
 
@@ -95,10 +95,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         ? room.devices
         : {
             ...room.devices,
-            light: { ...room.devices.light, isOn: false },
+            light: { ...room.devices.light, isOn: false, brightness: 0, preset: 'off' },
             ac: { ...room.devices.ac, isOn: false },
             projector: { ...room.devices.projector, isOn: false },
-            fan: { ...room.devices.fan, isOn: false },
+            fan: { ...room.devices.fan, isOn: false, speed: 0 },
           },
       lastUpdated: 'Vừa xong',
     });
@@ -106,6 +106,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
   // RELAY 1: ĐÈN CHIẾU SÁNG (light_on / relay1_den)
   const handleToggleLight = () => {
+    if (isMasterPowerCut) return;
     if (onToggleRelay) {
       onToggleRelay(room.code || room.id, 'relay1_den');
       return;
@@ -126,6 +127,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   };
 
   const handleLightPreset = (preset: LightPreset) => {
+    if (isMasterPowerCut) return;
     playClick();
     let brightness = 80;
     let isOn = true;
@@ -156,6 +158,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
   // RELAY 4: ĐIỀU HÒA (ac_on / relay4_dieuhoa)
   const handleToggleAc = () => {
+    if (isMasterPowerCut) return;
     if (onToggleRelay) {
       onToggleRelay(room.code || room.id, 'relay4_dieuhoa');
       return;
@@ -175,6 +178,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   };
 
   const handleChangeTemp = (delta: number) => {
+    if (isMasterPowerCut) return;
     playClick();
     const current = room.devices.ac.targetTemp;
     const newTemp = Math.min(30, Math.max(16, current + delta));
@@ -191,6 +195,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   };
 
   const handleAcMode = (mode: AcMode) => {
+    if (isMasterPowerCut) return;
     playClick();
     onUpdateRoom({
       ...room,
@@ -206,6 +211,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   };
 
   const handleAcTimer = (minutes: number | null) => {
+    if (isMasterPowerCut) return;
     playClick();
     onUpdateRoom({
       ...room,
@@ -221,6 +227,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
   // RELAY 3: MÁY CHIẾU (projector_on / relay3_maychieu)
   const handleToggleProjector = () => {
+    if (isMasterPowerCut) return;
     if (onToggleRelay) {
       onToggleRelay(room.code || room.id, 'relay3_maychieu');
       return;
@@ -240,6 +247,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   };
 
   const handleProjectorSource = (source: ProjectorInput) => {
+    if (isMasterPowerCut) return;
     playClick();
     onUpdateRoom({
       ...room,
@@ -255,6 +263,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
   // RELAY 2: QUẠT THÔNG GIÓ (fan_on / relay2_quat)
   const handleToggleFan = () => {
+    if (isMasterPowerCut) return;
     if (onToggleRelay) {
       onToggleRelay(room.code || room.id, 'relay2_quat');
       return;
@@ -275,6 +284,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
   };
 
   const handleFanSpeed = (speed: number) => {
+    if (isMasterPowerCut) return;
     playClick();
     onUpdateRoom({
       ...room,
@@ -285,20 +295,6 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
           speed,
         },
       },
-    });
-  };
-
-  // RELAY CÒI BÁO ĐỘNG (relay_alarm)
-  const handleToggleAlarmRelay = () => {
-    if (onToggleRelay) {
-      onToggleRelay(room.code || room.id, 'relay_alarm');
-      return;
-    }
-    const newState = !room.relayAlarm;
-    playSwitch(newState);
-    onUpdateRoom({
-      ...room,
-      relayAlarm: newState,
     });
   };
 
@@ -339,7 +335,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs animate-bounce shadow-lg shadow-red-600/30 active:scale-95 transition-all"
             >
               <Flame className="w-4 h-4 animate-spin" />
-              <span>ĐANG BÁO CHÁY! BẤM ĐỂ TẮT CÒI</span>
+              <span>ĐANG BÁO CHÁY! ĐẶT LẠI AN TOÀN</span>
             </button>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
@@ -400,7 +396,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                 PHÁT HIỆN BÁO CHÁY TẠI {room.name.toUpperCase()}!
               </h3>
               <p className="text-xs text-red-100 mt-0.5">
-                Còi hú báo động và đèn chớp đang phát tín hiệu cảnh báo. Đề nghị sơ tán học sinh theo lối cầu thang {room.building}.
+                Phát hiện sự cố cháy qua cảm biến PCCC. Đề nghị sơ tán học sinh theo lối cầu thang {room.building}.
               </p>
             </div>
           </div>
@@ -411,7 +407,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               className="flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-red-600 font-black text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>TẮT CÒI & ĐẶT LẠI AN TOÀN</span>
+              <span>ĐẶT LẠI TRẠNG THÁI AN TOÀN</span>
             </button>
 
             {room.isPowerOn && (
@@ -531,71 +527,47 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               </p>
             </div>
 
-            {/* Card 5: Carbon Monoxide (CO) */}
-            <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
-              airInfo.isCoAlert 
-                ? 'bg-red-950/40 border-red-500/80 ring-1 ring-red-500/40' 
-                : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
-            }`}>
+            {/* Card 5: Carbon Monoxide (CO) - Chỉ hiển thị thông số, không cảnh báo */}
+            <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between transition-all">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   Khí CO
                 </span>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                  airInfo.isCoAlert
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                }`}>
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-800 text-slate-300 border border-slate-700">
                   <Wind className="w-4 h-4" />
                 </div>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl sm:text-3xl font-black tracking-tight font-mono ${
-                  airInfo.isCoAlert ? 'text-red-400' : 'text-amber-300'
-                }`}>
+                <span className="text-2xl sm:text-3xl font-black tracking-tight font-mono text-white">
                   {airInfo.co}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">ppm</span>
               </div>
               <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full inline-block ${
-                  airInfo.isCoAlert ? 'bg-red-400 animate-ping' : 'bg-emerald-400'
-                }`} />
-                {airInfo.isCoAlert ? 'CO cảnh báo!' : 'CO đạt chuẩn'}
+                <span className="w-1.5 h-1.5 rounded-full inline-block bg-slate-400" />
+                Theo dõi chỉ số CO
               </p>
             </div>
 
-            {/* Card 6: Carbon Dioxide (CO2) */}
-            <div className={`relative overflow-hidden p-4 rounded-2xl border shadow-lg flex flex-col justify-between transition-all ${
-              airInfo.isCo2Alert 
-                ? 'bg-amber-950/40 border-amber-500/80 ring-1 ring-amber-500/40' 
-                : 'bg-gradient-to-br from-slate-900 to-slate-900/90 border-slate-800/80'
-            }`}>
+            {/* Card 6: Carbon Dioxide (CO2) - Chỉ hiển thị thông số, không cảnh báo */}
+            <div className="relative overflow-hidden p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/90 border border-slate-800/80 shadow-lg flex flex-col justify-between transition-all">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   Khí CO2
                 </span>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                  airInfo.isCo2Alert
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                }`}>
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
                   <Radio className="w-4 h-4" />
                 </div>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl sm:text-3xl font-black tracking-tight font-mono ${
-                  airInfo.isCo2Alert ? 'text-amber-300' : 'text-emerald-400'
-                }`}>
+                <span className="text-2xl sm:text-3xl font-black tracking-tight font-mono text-cyan-300">
                   {airInfo.co2}
                 </span>
                 <span className="text-xs font-semibold text-slate-400">ppm</span>
               </div>
               <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full inline-block ${
-                  airInfo.isCo2Alert ? 'bg-amber-400' : 'bg-emerald-400'
-                }`} />
-                {airInfo.isCo2Alert ? 'Cần thông gió/bật quạt' : 'CO2 trong lành'}
+                <span className="w-1.5 h-1.5 rounded-full inline-block bg-cyan-400" />
+                Theo dõi chỉ số CO2
               </p>
             </div>
           </div>
@@ -628,11 +600,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                     ? 'bg-red-600 text-white animate-pulse' 
                     : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 }`}>
-                  {isAlarm ? '🚨 CÒI HÚ ĐANG KÊU (95dB)' : '✓ SẴN SÀNG AN TOÀN'}
+                  {isAlarm ? '🚨 CẢNH BÁO CHÁY' : '✓ SẴN SÀNG AN TOÀN'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Giám sát cảm biến khói quang điện MQ-2, cảm biến nhiệt độ gia tăng và nút chuông báo cháy khẩn cấp
+                Giám sát cảm biến khói quang điện MQ-2 và cảm biến nhiệt độ gia tăng phòng học
               </p>
             </div>
           </div>
@@ -655,7 +627,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Emergency Manual Call Point (Hộp chuông đập kính báo cháy khẩn cấp) */}
+        {/* Emergency PCCC Status Bar */}
         <div className={`p-4 sm:p-5 rounded-2xl border mb-5 transition-all ${
           isAlarm 
             ? 'bg-red-950/80 border-red-500' 
@@ -663,9 +635,9 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
         }`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Siren className={`w-4 h-4 ${isAlarm ? 'text-red-400 animate-spin' : 'text-emerald-400'}`} />
+              <ShieldAlert className={`w-4 h-4 ${isAlarm ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`} />
               <span className="text-xs font-bold text-white uppercase tracking-wider">
-                Giám sát an toàn PCCC & Còi báo động thực tế
+                Giám sát an toàn PCCC phòng học
               </span>
             </div>
             <span className="text-[10px] font-mono text-slate-400">
@@ -680,7 +652,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                 className="w-full sm:flex-1 py-3.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-red-600 font-black text-xs tracking-wider uppercase shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>🛑 TẮT CÒI BÁO CHÁY & KHÔI PHỤC AN TOÀN</span>
+                <span>🛑 ĐẶT LẠI TRẠNG THÁI AN TOÀN PCCC</span>
               </button>
             ) : (
               <div className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs">
@@ -707,8 +679,8 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
           </div>
         </div>
 
-        {/* 4 Real-time PCCC Monitoring Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {/* 3 Real-time PCCC Monitoring Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           {/* Card 1: Cảm biến khói quang điện */}
           <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
@@ -764,29 +736,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Card 3: Còi hú & Đèn chớp */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-slate-400">Còi hú & Đèn chớp</span>
-              <Bell className={`w-4 h-4 ${isAlarm ? 'text-red-400 animate-spin' : 'text-slate-400'}`} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">
-                {isAlarm ? 'Đang phát tín hiệu' : 'Chế độ chờ (Standby)'}
-              </p>
-              <p className="text-xs font-mono text-slate-400 mt-0.5">
-                Âm lượng: 95 dB
-              </p>
-              <div className="flex items-center gap-1.5 mt-2">
-                <span className={`w-2 h-2 rounded-full ${isAlarm ? 'bg-red-500 animate-ping' : 'bg-emerald-400'}`} />
-                <span className="text-[10px] text-slate-400">
-                  {isAlarm ? 'Đèn chớp đỏ nhấp nháy' : 'Hệ thống sẵn sàng'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Bình chữa cháy tại chỗ */}
+          {/* Card 3: Bình chữa cháy tại chỗ */}
           <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold text-slate-400">Bình chữa cháy</span>
@@ -847,7 +797,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                   Bảng Điều Khiển Rơ-le Phần Cứng 220V • Phòng {room.name}
                 </h3>
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                  4 RƠ-LE + CÒI BÁO ĐỘNG
+                  4 RƠ-LE + CẦU DAO TỔNG
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -860,12 +810,18 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             {onToggleRelay && (
               <button
                 type="button"
+                disabled={isMasterPowerCut}
                 onClick={() => {
+                  if (isMasterPowerCut) return;
                   playClick();
                   onToggleRelay(room.code || room.id, 'auto_mode');
                 }}
-                title="Chuyển chế độ Tự động (auto_mode) hoặc Thủ công trong bảng relay_control"
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 border transition-all active:scale-95 ${
+                title={
+                  isMasterPowerCut
+                    ? 'Cầu dao tổng đang ngắt điện — đóng điện nguồn để đổi chế độ Auto Mode'
+                    : 'Chuyển chế độ Tự động (auto_mode) hoặc Thủ công trong bảng relay_control'
+                }
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 border transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
                   room.relayControl?.auto_mode
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/10'
                     : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
@@ -881,6 +837,30 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Cảnh báo khóa 4 Relay khi Cầu dao tổng đang NGẮT ĐIỆN */}
+        {isMasterPowerCut && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-red-950/60 border border-red-500/50 text-red-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
+            <div className="flex items-center gap-2.5">
+              <ZapOff className="w-5 h-5 text-red-400 shrink-0" />
+              <div>
+                <p className="font-bold text-red-300">
+                  CẦU DAO TỔNG ĐANG NGẮT ĐIỆN — ĐÃ KHÓA CẢ 4 RELAY
+                </p>
+                <p className="text-[11px] text-red-200/80 mt-0.5">
+                  Không cho phép kích hoạt Relay 1–4 (Đèn, Quạt, Máy chiếu, Điều hòa) khi cầu dao đang ngắt nguồn. Bấm &ldquo;ĐÓNG ĐIỆN PHÒNG&rdquo; để cấp nguồn trở lại.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onEmergencyCut(room.id, false)}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 active:scale-95 transition-all"
+            >
+              ĐÓNG ĐIỆN PHÒNG
+            </button>
+          </div>
+        )}
 
         {/* 6 Relay Cards (Relay 1 to 4 + Relay Alarm + Master Power) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 relative z-10">
@@ -928,7 +908,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
             <button
               onClick={handleToggleLight}
-              disabled={room.emergencyPowerCut}
+              disabled={isMasterPowerCut}
               className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
                 room.devices.light.isOn
                   ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
@@ -984,7 +964,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
             <button
               onClick={handleToggleFan}
-              disabled={room.emergencyPowerCut}
+              disabled={isMasterPowerCut}
               className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
                 room.devices.fan.isOn
                   ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
@@ -1040,7 +1020,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
             <button
               onClick={handleToggleProjector}
-              disabled={room.emergencyPowerCut}
+              disabled={isMasterPowerCut}
               className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
                 room.devices.projector.isOn
                   ? 'bg-purple-500 hover:bg-purple-400 text-white shadow-md shadow-purple-500/20'
@@ -1096,7 +1076,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
             <button
               onClick={handleToggleAc}
-              disabled={room.emergencyPowerCut}
+              disabled={isMasterPowerCut}
               className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
                 room.devices.ac.isOn
                   ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
@@ -1108,69 +1088,16 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             </button>
           </div>
 
-          {/* 5. RELAY 5: CÒI BÁO ĐỘNG PCCC */}
-          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-            room.relayAlarm
-              ? 'bg-red-950/60 border-red-500 shadow-xl shadow-red-500/30 ring-2 ring-red-500 animate-pulse'
-              : 'bg-slate-950/70 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
-                  room.relayAlarm ? 'bg-red-600 text-white' : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                }`}>
-                  KHẨN CẤP / CÒI
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  relay_control.khan_cap
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3 my-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                  room.relayAlarm
-                    ? 'bg-red-600 text-white animate-bounce shadow-lg shadow-red-600/40'
-                    : 'bg-slate-800 text-slate-500'
-                }`}>
-                  <Siren className={`w-5 h-5 stroke-[2.2] ${room.relayAlarm ? 'animate-spin' : ''}`} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-sm">Còi Hú Báo Cháy</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${room.relayAlarm ? 'bg-red-500 animate-ping' : 'bg-slate-600'}`} />
-                    <span className={room.relayAlarm ? 'text-red-400 font-bold' : ''}>
-                      {room.relayAlarm ? '🚨 CÒI ĐANG HÚ' : 'Chế độ chờ (OFF)'}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleToggleAlarmRelay}
-              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                room.relayAlarm
-                  ? 'bg-white hover:bg-slate-100 text-red-600 shadow-xl'
-                  : 'bg-slate-800 hover:bg-red-950/40 text-red-300 hover:text-red-200 border border-red-500/30'
-              }`}
-            >
-              <Siren className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>{room.relayAlarm ? '🛑 TẮT CÒI BÁO ĐỘNG' : 'TEST CÒI BÁO ĐỘNG'}</span>
-            </button>
-          </div>
-
-          {/* 6. CẦU DAO NGUỒN PHÒNG (POWER_ON) */}
+          {/* 5. CẦU DAO TỔNG KHẨN CẤP (POWER_ON) */}
           <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
             room.isPowerOn
-              ? 'bg-slate-900 border-slate-700'
-              : 'bg-red-950/40 border-red-500/60'
+              ? 'bg-slate-900 border-red-500/30'
+              : 'bg-red-950/50 border-red-500/80 ring-1 ring-red-500/40'
           }`}>
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
-                  room.isPowerOn ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                }`}>
-                  CẦU DAO TỔNG
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-red-600/25 text-red-300 border border-red-500/40">
+                  CẦU DAO TỔNG • KHẨN CẤP
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">
                   rooms.power_on
@@ -1181,15 +1108,17 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
                   room.isPowerOn
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    : 'bg-red-600/30 text-red-400 border border-red-500/40'
                 }`}>
                   <Power className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-white text-sm">Nguồn Điện Phòng</h4>
+                  <h4 className="font-bold text-white text-sm">Cầu Dao Tổng Phòng</h4>
                   <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${room.isPowerOn ? 'bg-emerald-400' : 'bg-red-500'}`} />
-                    <span>{room.isPowerOn ? 'Phòng đang có điện (ON)' : 'ĐÃ NGẮT ĐIỆN (OFF)'}</span>
+                    <span className={`w-2 h-2 rounded-full ${room.isPowerOn ? 'bg-emerald-400' : 'bg-red-500 animate-ping'}`} />
+                    <span className={!room.isPowerOn ? 'text-red-300 font-bold' : ''}>
+                      {room.isPowerOn ? 'Đang đóng điện (ON)' : 'ĐÃ NGẮT KHẨN CẤP (OFF)'}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -1199,12 +1128,12 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               onClick={() => onEmergencyCut(room.id, room.isPowerOn)}
               className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
                 room.isPowerOn
-                  ? 'bg-red-600/90 hover:bg-red-500 text-white shadow-md shadow-red-600/20'
+                  ? 'bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/30'
                   : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20'
               }`}
             >
               <Power className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>{room.isPowerOn ? 'NGẮT NGUỒN PHÒNG' : 'ĐÓNG ĐIỆN PHÒNG'}</span>
+              <span>{room.isPowerOn ? 'NGẮT KHẨN CẤP PHÒNG' : 'ĐÓNG ĐIỆN PHÒNG'}</span>
             </button>
           </div>
         </div>
@@ -1236,10 +1165,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
           {/* Toggle Switch */}
           <button
             onClick={handleToggleLight}
-            disabled={room.emergencyPowerCut}
+            disabled={isMasterPowerCut}
             className={`w-14 h-8 rounded-full p-1 transition-colors duration-200 ease-in-out relative ${
               room.devices.light.isOn ? 'bg-amber-500' : 'bg-slate-800'
-            } ${room.emergencyPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${isMasterPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <div
               className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
@@ -1268,7 +1197,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                 <button
                   key={p.id}
                   onClick={() => handleLightPreset(p.id as LightPreset)}
-                  disabled={room.emergencyPowerCut}
+                  disabled={isMasterPowerCut}
                   className={`p-3 rounded-2xl text-left border transition-all active:scale-95 ${
                     active
                       ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-md shadow-amber-500/10'
@@ -1353,10 +1282,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
           {/* Toggle Switch */}
           <button
             onClick={handleToggleAc}
-            disabled={room.emergencyPowerCut}
+            disabled={isMasterPowerCut}
             className={`w-14 h-8 rounded-full p-1 transition-colors duration-200 ease-in-out relative ${
               room.devices.ac.isOn ? 'bg-cyan-500' : 'bg-slate-800'
-            } ${room.emergencyPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${isMasterPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <div
               className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
@@ -1381,14 +1310,14 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleChangeTemp(-1)}
-                disabled={!room.devices.ac.isOn || room.emergencyPowerCut}
+                disabled={!room.devices.ac.isOn || isMasterPowerCut}
                 className="w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-black text-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-40"
               >
                 −
               </button>
               <button
                 onClick={() => handleChangeTemp(1)}
-                disabled={!room.devices.ac.isOn || room.emergencyPowerCut}
+                disabled={!room.devices.ac.isOn || isMasterPowerCut}
                 className="w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-black text-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-40"
               >
                 +
@@ -1411,7 +1340,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                 <button
                   key={m.id}
                   onClick={() => handleAcMode(m.id as AcMode)}
-                  disabled={!room.devices.ac.isOn || room.emergencyPowerCut}
+                  disabled={!room.devices.ac.isOn || isMasterPowerCut}
                   className={`py-2 text-[11px] font-bold rounded-xl transition-all ${
                     room.devices.ac.isOn && room.devices.ac.mode === m.id
                       ? 'bg-cyan-500 text-slate-950 shadow-md'
@@ -1442,7 +1371,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               <button
                 key={mins}
                 onClick={() => handleAcTimer(mins)}
-                disabled={!room.devices.ac.isOn || room.emergencyPowerCut}
+                disabled={!room.devices.ac.isOn || isMasterPowerCut}
                 className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
                   room.devices.ac.timerMinutes === mins
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
@@ -1490,10 +1419,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
               <button
                 onClick={handleToggleProjector}
-                disabled={room.emergencyPowerCut}
+                disabled={isMasterPowerCut}
                 className={`w-14 h-8 rounded-full p-1 transition-colors duration-200 relative ${
                   room.devices.projector.isOn ? 'bg-purple-500' : 'bg-slate-800'
-                } ${room.emergencyPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${isMasterPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div
                   className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
@@ -1517,7 +1446,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                   <button
                     key={s.id}
                     onClick={() => handleProjectorSource(s.id as ProjectorInput)}
-                    disabled={!room.devices.projector.isOn || room.emergencyPowerCut}
+                    disabled={!room.devices.projector.isOn || isMasterPowerCut}
                     className={`py-2 text-xs rounded-xl font-semibold transition-all ${
                       room.devices.projector.isOn && room.devices.projector.inputSource === s.id
                         ? 'bg-purple-500/25 text-purple-300 border border-purple-500/50 shadow-md'
@@ -1558,10 +1487,10 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
               <button
                 onClick={handleToggleFan}
-                disabled={room.emergencyPowerCut}
+                disabled={isMasterPowerCut}
                 className={`w-14 h-8 rounded-full p-1 transition-colors duration-200 relative ${
                   room.devices.fan.isOn ? 'bg-emerald-500' : 'bg-slate-800'
-                } ${room.emergencyPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${isMasterPowerCut ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div
                   className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
@@ -1581,7 +1510,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                   <button
                     key={spd}
                     onClick={() => handleFanSpeed(spd)}
-                    disabled={!room.devices.fan.isOn || room.emergencyPowerCut}
+                    disabled={!room.devices.fan.isOn || isMasterPowerCut}
                     className={`py-2 text-xs rounded-xl font-bold transition-all ${
                       room.devices.fan.isOn && room.devices.fan.speed === spd
                         ? 'bg-emerald-500 text-slate-950 shadow-md'

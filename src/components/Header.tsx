@@ -178,11 +178,11 @@ export const Header: React.FC<HeaderProps> = ({
         {activeAlarmCount > 0 && (
           <button
             onClick={onClearAllAlarms}
-            title="Đặt lại và tắt toàn bộ còi báo động về an toàn"
+            title="Đặt lại toàn bộ cảnh báo về trạng thái an toàn"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white border border-red-400/50 text-xs font-bold transition-all active:scale-95 animate-bounce shadow-md shadow-red-600/30"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-white" />
-            <span>Tắt còi báo động ({activeAlarmCount})</span>
+            <span>Đặt lại cảnh báo ({activeAlarmCount})</span>
           </button>
         )}
 

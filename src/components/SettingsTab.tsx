@@ -277,7 +277,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-400">
-              Kích hoạt còi báo cháy và nhấp nháy đỏ khi nồng độ khói vượt mức này (an toàn &lt; 100 ppm).
+              Hiển thị cảnh báo cháy và nhấp nháy đỏ khi nồng độ khói vượt mức này (an toàn &lt; 100 ppm).
             </p>
 
             <input
@@ -303,8 +303,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
             <div>
-              <p className="font-bold text-white text-xs">Âm thanh hiệu ứng & Còi cảnh báo</p>
-              <p className="text-[11px] text-slate-400">Bật âm thanh khi bấm nút và có báo động</p>
+              <p className="font-bold text-white text-xs">Âm thanh hiệu ứng thao tác</p>
+              <p className="text-[11px] text-slate-400">Bật âm thanh nhẹ khi bấm nút điều khiển thiết bị</p>
             </div>
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}

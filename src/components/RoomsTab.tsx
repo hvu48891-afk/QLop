@@ -15,7 +15,6 @@ import {
   Wind, 
   Tv, 
   Fan,
-  Siren,
   Power, 
   Check, 
   AlertOctagon,
@@ -291,7 +290,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 sm:gap-5">
         {filteredRooms.map((room) => {
           const isAlarm = room.status === 'alert' || room.hasFireAlarm || room.smokeLevel >= 350;
-          const isPowerOn = room.status === 'on' || (room.isPowerOn && room.status !== 'off');
+          const isPowerOn = (room.status === 'on' || (room.isPowerOn && room.status !== 'off')) && !room.emergencyPowerCut;
+          const isMasterPowerCut = !room.isPowerOn || room.emergencyPowerCut;
 
           // Card Background & Border Style as specified:
           // off = xám
@@ -366,15 +366,15 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
                 {/* Action buttons on card (Fire Alarm, Delete & Power) */}
                 <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  {/* Nút Tắt còi khẩn cấp khi phòng có sự cố báo cháy thực tế */}
+                  {/* Nút Đặt lại an toàn khi phòng có sự cố báo cháy */}
                   {isAlarm && (
                     <button
                       onClick={(e) => onTriggerSmoke(room.code || room.id, e, false)}
-                      title="Tắt còi báo cháy và khôi phục an toàn cho phòng này"
+                      title="Xác nhận và đặt lại trạng thái an toàn cho phòng này"
                       className="px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1 shadow-lg shadow-red-600/40 animate-bounce active:scale-95 transition-all"
                     >
                       <Flame className="w-3.5 h-3.5 animate-spin" />
-                      <span>Tắt còi</span>
+                      <span>Đặt lại</span>
                     </button>
                   )}
 
@@ -408,11 +408,8 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 <div className="mb-3 px-3 py-2 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-xs font-bold flex items-center justify-between gap-1.5 shadow-lg shadow-red-600/30 animate-pulse">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Flame className="w-4 h-4 shrink-0 animate-bounce text-yellow-300" />
-                    <span className="truncate">🚨 BÁO CHÁY! Khói: {room.smokeLevel} ppm</span>
+                    <span className="truncate">🚨 CẢNH BÁO CHÁY! Khói: {room.smokeLevel} ppm</span>
                   </div>
-                  <span className="px-1.5 py-0.5 rounded bg-black/30 text-[10px] font-black uppercase tracking-wider shrink-0">
-                    CÒI ĐANG HÚ
-                  </span>
                 </div>
               )}
 
@@ -462,20 +459,20 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1 min-w-0">
-                      <Wind className={`w-3.5 h-3.5 shrink-0 ${air.isCoAlert ? 'text-red-400 animate-pulse' : 'text-amber-400'}`} />
+                      <Wind className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                       <div className="min-w-0">
                         <p className="text-[8px] text-slate-400 leading-none">Khí CO</p>
-                        <p className={`text-[11px] font-bold font-mono mt-0.5 truncate ${air.isCoAlert ? 'text-red-400' : 'text-amber-300'}`}>
+                        <p className="text-[11px] font-bold font-mono mt-0.5 truncate text-slate-200">
                           {air.coText}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1 min-w-0">
-                      <Radio className={`w-3.5 h-3.5 shrink-0 ${air.isCo2Alert ? 'text-amber-400' : 'text-emerald-400'}`} />
+                      <Radio className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
                       <div className="min-w-0">
                         <p className="text-[8px] text-slate-400 leading-none">Khí CO2</p>
-                        <p className={`text-[11px] font-bold font-mono mt-0.5 truncate ${air.isCo2Alert ? 'text-amber-300' : 'text-emerald-300'}`}>
+                        <p className="text-[11px] font-bold font-mono mt-0.5 truncate text-cyan-300">
                           {air.co2Text}
                         </p>
                       </div>
@@ -493,9 +490,16 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   {/* R1: Đèn */}
                   <button
                     type="button"
-                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay1_den')}
-                    title={room.devices.light.isOn ? 'Relay 1 (Đèn): Đang BẬT. Bấm để tắt.' : 'Relay 1 (Đèn): Đang TẮT. Bấm để bật.'}
-                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                    disabled={isMasterPowerCut}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay1_den')}
+                    title={
+                      isMasterPowerCut
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 1'
+                        : room.devices.light.isOn
+                        ? 'Relay 1 (Đèn): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 1 (Đèn): Đang TẮT. Bấm để bật.'
+                    }
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                       room.devices.light.isOn
                         ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/30'
                         : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
@@ -508,9 +512,16 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   {/* R2: Quạt */}
                   <button
                     type="button"
-                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay2_quat')}
-                    title={room.devices.fan.isOn ? 'Relay 2 (Quạt): Đang BẬT. Bấm để tắt.' : 'Relay 2 (Quạt): Đang TẮT. Bấm để bật.'}
-                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                    disabled={isMasterPowerCut}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay2_quat')}
+                    title={
+                      isMasterPowerCut
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 2'
+                        : room.devices.fan.isOn
+                        ? 'Relay 2 (Quạt): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 2 (Quạt): Đang TẮT. Bấm để bật.'
+                    }
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                       room.devices.fan.isOn
                         ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30'
                         : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
@@ -523,9 +534,16 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   {/* R3: Máy chiếu */}
                   <button
                     type="button"
-                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay3_maychieu')}
-                    title={room.devices.projector.isOn ? 'Relay 3 (Máy chiếu): Đang BẬT. Bấm để tắt.' : 'Relay 3 (Máy chiếu): Đang TẮT. Bấm để bật.'}
-                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                    disabled={isMasterPowerCut}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay3_maychieu')}
+                    title={
+                      isMasterPowerCut
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 3'
+                        : room.devices.projector.isOn
+                        ? 'Relay 3 (Máy chiếu): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 3 (Máy chiếu): Đang TẮT. Bấm để bật.'
+                    }
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                       room.devices.projector.isOn
                         ? 'bg-purple-500 text-white shadow-sm shadow-purple-500/30'
                         : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
@@ -538,9 +556,16 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                   {/* R4: Điều hòa */}
                   <button
                     type="button"
-                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'relay4_dieuhoa')}
-                    title={room.devices.ac.isOn ? 'Relay 4 (Điều hòa): Đang BẬT. Bấm để tắt.' : 'Relay 4 (Điều hòa): Đang TẮT. Bấm để bật.'}
-                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                    disabled={isMasterPowerCut}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay4_dieuhoa')}
+                    title={
+                      isMasterPowerCut
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 4'
+                        : room.devices.ac.isOn
+                        ? 'Relay 4 (Điều hòa): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 4 (Điều hòa): Đang TẮT. Bấm để bật.'
+                    }
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                       room.devices.ac.isOn
                         ? 'bg-cyan-500 text-slate-950 shadow-sm shadow-cyan-500/30'
                         : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
@@ -550,32 +575,20 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                     <span>R4</span>
                   </button>
 
-                  {/* R5 / Còi Báo Động */}
-                  <button
-                    type="button"
-                    onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'khan_cap')}
-                    title={room.relayAlarm ? 'Còi báo động đang HÚ. Bấm để tắt.' : 'Còi báo động đang TẮT. Bấm để test còi.'}
-                    className={`px-1.5 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
-                      room.relayAlarm
-                        ? 'bg-red-600 text-white animate-bounce shadow-sm shadow-red-600/40'
-                        : 'bg-slate-800/80 text-red-400/80 hover:text-red-300 border border-slate-700/60'
-                    }`}
-                  >
-                    <Siren className={`w-3 h-3 stroke-[2.2] ${room.relayAlarm ? 'animate-spin' : ''}`} />
-                    <span>Còi</span>
-                  </button>
-
                   {/* Auto Mode Toggle */}
                   {room.relayControl && (
                     <button
                       type="button"
-                      onClick={() => onToggleRelay && onToggleRelay(room.code || room.id, 'auto_mode')}
+                      disabled={isMasterPowerCut}
+                      onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'auto_mode')}
                       title={
-                        room.relayControl.auto_mode
+                        isMasterPowerCut
+                          ? 'Cầu dao tổng đang ngắt điện — không thể đổi chế độ Auto Mode'
+                          : room.relayControl.auto_mode
                           ? 'auto_mode đang BẬT (Tự động theo cảm biến). Bấm để chuyển Thủ công.'
                           : 'auto_mode đang TẮT (Thủ công). Bấm để bật Tự động.'
                       }
-                      className={`px-1.5 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 ${
+                      className={`px-1.5 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                         room.relayControl.auto_mode
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'

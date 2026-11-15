@@ -62,24 +62,9 @@ class SoundManager {
     } catch {}
   }
 
-  // Âm thanh cảnh báo khói / khẩn cấp
+  // Đã tắt còi hú báo động theo yêu cầu
   public playAlarm(): void {
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.setValueAtTime(650, now + 0.15);
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.3);
-    } catch {}
+    // No-op: fire alarm siren removed
   }
 
   // Âm thanh ngắt điện khẩn cấp / sập cầu dao tổng
@@ -102,26 +87,9 @@ class SoundManager {
     } catch {}
   }
 
-  // Còi hú báo cháy hai âm tần đặc trưng (Fire alarm emergency siren)
+  // Đã bỏ còi hú báo cháy
   public playFireSiren(): void {
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sawtooth';
-      // Dao động giữa 980Hz và 680Hz
-      osc.frequency.setValueAtTime(980, now);
-      osc.frequency.linearRampToValueAtTime(680, now + 0.25);
-      osc.frequency.linearRampToValueAtTime(980, now + 0.5);
-      gain.gain.setValueAtTime(0.22, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.55);
-    } catch {}
+    // No-op: fire alarm siren removed
   }
 }
 

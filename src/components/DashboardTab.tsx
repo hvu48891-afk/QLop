@@ -90,21 +90,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   const displayedAlerts = alertViewMode === 'unresolved' ? unresolvedAlerts : resolvedAlerts;
 
-  // Approximate energy calculation (lights ~240W, AC ~1600W, projector ~320W, fan ~120W)
-  const currentTotalPowerKW = rooms.reduce((acc, r) => {
-    if (!r.isPowerOn || r.emergencyPowerCut) return acc;
-    let powerW = 0;
-    if (r.devices.light.isOn) powerW += (r.devices.light.brightness / 100) * 240;
-    if (r.devices.ac.isOn) powerW += 1600;
-    if (r.devices.projector.isOn) powerW += 320;
-    if (r.devices.fan.isOn) powerW += r.devices.fan.speed * 30;
-    return acc + powerW;
-  }, 0) / 1000;
-
   return (
     <div className="space-y-6 pb-24 lg:pb-12">
       {/* ================= 1. STATS METRICS ================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {/* Card 1: Số phòng đang mở điện */}
         <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-amber-500/30 shadow-lg relative overflow-hidden">
           <div className="flex items-center justify-between mb-2">
@@ -187,27 +176,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
           <p className="mt-2 text-[11px] text-slate-400 truncate">
             {criticalAlarmCount > 0 ? 'Phát hiện khói / quá nhiệt!' : 'Tất cả cảm biến bình thường'}
-          </p>
-        </div>
-
-        {/* Card 4: Công suất tức thời */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Công suất tức thời
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-black text-cyan-400 font-mono">
-              {currentTotalPowerKW.toFixed(1)}
-            </span>
-            <span className="text-sm font-semibold text-slate-400">kW</span>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-400">
-            Ước tính tiêu thụ: {(currentTotalPowerKW * 4.2).toFixed(1)} kWh hôm nay
           </p>
         </div>
       </div>
@@ -387,16 +355,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         )}
                       </td>
                       <td className="py-2.5 px-3 font-sans">
-                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] font-mono ${
-                          air.isCoAlert ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'text-amber-300'
-                        }`}>
+                        <span className="px-2 py-0.5 rounded font-bold text-[11px] font-mono text-slate-200">
                           {air.coText}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 font-sans">
-                        <span className={`px-2 py-0.5 rounded font-bold text-[11px] font-mono ${
-                          air.isCo2Alert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-emerald-300'
-                        }`}>
+                        <span className="px-2 py-0.5 rounded font-bold text-[11px] font-mono text-cyan-300">
                           {air.co2Text}
                         </span>
                       </td>

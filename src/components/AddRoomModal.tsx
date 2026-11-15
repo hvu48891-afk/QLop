@@ -260,7 +260,7 @@ export const AddRoomModal: React.FC<AddRoomModalProps> = ({
           {/* Fire Protection & Alarm System Inclusion */}
           <div className="p-3 rounded-2xl bg-red-950/30 border border-red-500/30 flex items-center gap-2.5 text-xs text-red-200">
             <Flame className="w-4 h-4 text-red-400 shrink-0" />
-            <span>Tự động trang bị Đầu báo khói quang điện MQ-2 & Hộp còi báo cháy khẩn cấp cho phòng này.</span>
+            <span>Tự động trang bị Đầu báo khói quang điện MQ-2 & cảm biến nhiệt PCCC cho phòng này.</span>
           </div>
 
           <div className="pt-2 flex gap-2">

@@ -168,12 +168,20 @@ export default function App() {
       setSupabaseStatus(prev => ({ ...prev, dbRoomCount: fetchedRooms.length }));
       setRecentSensorLogs(fetchedSensors || []);
 
-      const cleanAlerts = fetchedAlerts.filter(
-        (a) => !a.message.toLowerCase().includes('phòng này đã ngắt điện') &&
-               !a.message.toLowerCase().includes('cảm biến khói phát hiện nồng độ vượt ngưỡng (25 ppm') &&
-               !a.message.toLowerCase().includes('[test') &&
-               !a.message.toLowerCase().includes('test cảnh báo')
-      );
+      const isIgnoredAlert = (a: AlertLog) => {
+        const msg = a.message.toLowerCase();
+        const type = String(a.type || '').toLowerCase();
+        return (
+          msg.includes('phòng này đã ngắt điện') ||
+          msg.includes('cảm biến khói phát hiện nồng độ vượt ngưỡng (25 ppm') ||
+          msg.includes('[test') ||
+          msg.includes('test cảnh báo') ||
+          type === 'co' ||
+          type === 'co2' ||
+          /khí\s*co2?\b|\bco2\b|nồng độ\s*co\b|\bco\s*vượt/i.test(msg)
+        );
+      };
+      const cleanAlerts = fetchedAlerts.filter((a) => !isIgnoredAlert(a));
       setAlerts(cleanAlerts);
       setRules(fetchedSchedules);
       if (fetchedSettings) {
@@ -237,13 +245,15 @@ export default function App() {
         });
       },
       (newAlert: AlertLog) => {
+        const msg = newAlert.message.toLowerCase();
+        const type = String(newAlert.type || '').toLowerCase();
+        if (type === 'co' || type === 'co2' || /khí\s*co2?\b|\bco2\b|nồng độ\s*co\b|\bco\s*vượt/i.test(msg)) {
+          return;
+        }
         setAlerts((prev) => {
           if (prev.some((a) => a.id === newAlert.id || a.message === newAlert.message)) return prev;
           return [newAlert, ...prev];
         });
-        if (settingsRef.current.soundEnabled) {
-          soundManager.playAlarm();
-        }
       },
       (sensorData) => {
         // Lưu vào danh sách telemetry logs gần nhất (bảng sensor_data)
@@ -259,7 +269,7 @@ export default function App() {
           });
         });
 
-        // Chỉ tạo cảnh báo thực tế khi cảm biến trong bảng sensor_data phát hiện Lửa hoặc Khí gas
+        // Chỉ tạo cảnh báo thực tế khi cảm biến phát hiện Lửa hoặc Khí gas (không cảnh báo CO/CO2 và không hú còi)
         const luaStr = String(sensorData.lua || '').trim().toLowerCase();
         const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
         const gasVal = Number(sensorData.gas) || 0;
@@ -277,9 +287,6 @@ export default function App() {
             createdAt: sensorData.created_at,
           };
           setAlerts((prev) => [flameAlert, ...prev.filter((a) => a.id !== flameAlert.id)]);
-          if (settingsRef.current.soundEnabled) {
-            soundManager.playFireSiren();
-          }
         } else if (gasVal > 15) {
           const gasAlert: AlertLog = {
             id: `sensor-gas-${sensorData.id}`,
@@ -294,9 +301,6 @@ export default function App() {
             createdAt: sensorData.created_at,
           };
           setAlerts((prev) => [gasAlert, ...prev.filter((a) => a.id !== gasAlert.id)]);
-          if (settingsRef.current.soundEnabled) {
-            soundManager.playAlarm();
-          }
         }
       },
       (rc: DbRelayControl) => {
@@ -453,24 +457,49 @@ export default function App() {
     const prevRoom = roomsRef.current.find((r) => r.code === updated.code || r.id === updated.id);
     const roomCode = updated.code || updated.id;
 
-    roomsRef.current = roomsRef.current.map((r) => (r.code === roomCode ? updated : r));
-    setRooms((prev) => prev.map((r) => (r.code === roomCode ? updated : r)));
+    // Nếu cầu dao tổng đang ngắt điện (isPowerOn = false hoặc emergencyPowerCut = true), không cho phép kích hoạt 4 relay
+    const isMasterCut = !updated.isPowerOn || updated.emergencyPowerCut;
+    const safeUpdated: Room = isMasterCut
+      ? {
+          ...updated,
+          devices: {
+            ...updated.devices,
+            light: { ...updated.devices.light, isOn: false, brightness: 0, preset: 'off' },
+            fan: { ...updated.devices.fan, isOn: false, speed: 0 },
+            projector: { ...updated.devices.projector, isOn: false },
+            ac: { ...updated.devices.ac, isOn: false },
+          },
+          relayControl: updated.relayControl
+            ? {
+                ...updated.relayControl,
+                relay1_den: false,
+                relay2_quat: false,
+                relay3_maychieu: false,
+                relay4_dieuhoa: false,
+                auto_mode: false,
+              }
+            : updated.relayControl,
+        }
+      : updated;
+
+    roomsRef.current = roomsRef.current.map((r) => (r.code === roomCode ? safeUpdated : r));
+    setRooms((prev) => prev.map((r) => (r.code === roomCode ? safeUpdated : r)));
 
     const relaysChanged =
       !prevRoom ||
-      prevRoom.devices.light.isOn !== updated.devices.light.isOn ||
-      prevRoom.devices.fan.isOn !== updated.devices.fan.isOn ||
-      prevRoom.devices.projector.isOn !== updated.devices.projector.isOn ||
-      prevRoom.devices.ac.isOn !== updated.devices.ac.isOn ||
-      prevRoom.relayAlarm !== updated.relayAlarm;
+      prevRoom.devices.light.isOn !== safeUpdated.devices.light.isOn ||
+      prevRoom.devices.fan.isOn !== safeUpdated.devices.fan.isOn ||
+      prevRoom.devices.projector.isOn !== safeUpdated.devices.projector.isOn ||
+      prevRoom.devices.ac.isOn !== safeUpdated.devices.ac.isOn ||
+      prevRoom.relayAlarm !== safeUpdated.relayAlarm;
 
     if (relaysChanged) {
       const rcRes = await supabaseService.updateRelayControl(roomCode, {
-        relay1_den: updated.devices.light.isOn,
-        relay2_quat: updated.devices.fan.isOn,
-        relay3_maychieu: updated.devices.projector.isOn,
-        relay4_dieuhoa: updated.devices.ac.isOn,
-        khan_cap: updated.relayAlarm,
+        relay1_den: safeUpdated.devices.light.isOn,
+        relay2_quat: safeUpdated.devices.fan.isOn,
+        relay3_maychieu: safeUpdated.devices.projector.isOn,
+        relay4_dieuhoa: safeUpdated.devices.ac.isOn,
+        khan_cap: safeUpdated.relayAlarm,
         auto_mode: false,
       });
       if (rcRes.row) {
@@ -482,19 +511,19 @@ export default function App() {
 
     // Cập nhật lên Supabase theo đúng các cột trong bảng rooms
     await supabaseService.updateRoom(roomCode, {
-      power_on: updated.isPowerOn,
-      status: updated.hasFireAlarm ? 'alert' : updated.isPowerOn ? 'on' : 'off',
-      light_on: updated.devices.light.isOn,
-      light_mode: updated.devices.light.preset,
-      ac_on: updated.devices.ac.isOn,
-      ac_temp: updated.devices.ac.targetTemp,
-      ac_mode: updated.devices.ac.mode,
-      projector_on: updated.devices.projector.isOn,
-      fan_on: updated.devices.fan.isOn,
-      relay_alarm: updated.relayAlarm,
+      power_on: safeUpdated.isPowerOn,
+      status: safeUpdated.hasFireAlarm ? 'alert' : safeUpdated.isPowerOn ? 'on' : 'off',
+      light_on: safeUpdated.devices.light.isOn,
+      light_mode: safeUpdated.devices.light.preset,
+      ac_on: safeUpdated.devices.ac.isOn,
+      ac_temp: safeUpdated.devices.ac.targetTemp,
+      ac_mode: safeUpdated.devices.ac.mode,
+      projector_on: safeUpdated.devices.projector.isOn,
+      fan_on: safeUpdated.devices.fan.isOn,
+      relay_alarm: safeUpdated.relayAlarm,
     });
 
-    logActivity(`Cập nhật trạng thái thiết bị ${updated.name}`, roomCode, updated.name);
+    logActivity(`Cập nhật trạng thái thiết bị ${safeUpdated.name}`, roomCode, safeUpdated.name);
   };
 
   // THAO TÁC BẬT / TẮT TRỰC TIẾP CÁC RƠ-LE TRONG BẢNG relay_control (RELAY 1, 2, 3, 4, KHẨN CẤP, AUTO MODE, CẦU DAO)
@@ -507,6 +536,18 @@ export default function App() {
     if (!targetRoom) return;
 
     const targetCode = targetRoom.code || targetRoom.id;
+    const isMasterCut = !targetRoom.isPowerOn || targetRoom.emergencyPowerCut;
+    const isLockedByBreaker = ['relay1_den', 'relay2_quat', 'relay3_maychieu', 'relay4_dieuhoa', 'auto_mode'].includes(relayType);
+
+    if (isMasterCut && isLockedByBreaker) {
+      setDbSyncToast({
+        message: `⚠️ Cầu dao tổng phòng ${targetRoom.name} đang NGẮT ĐIỆN! Không thể kích hoạt 4 Relay khi chưa đóng nguồn.`,
+        type: 'error',
+      });
+      setTimeout(() => setDbSyncToast(null), 3500);
+      return;
+    }
+
     let newState: boolean;
     const updatedDevices = { ...targetRoom.devices };
     let newPowerOn = targetRoom.isPowerOn;
@@ -679,7 +720,7 @@ export default function App() {
     logActivity(`${newState ? 'Bật nguồn điện' : 'Tắt nguồn điện'} ${target.name}`, targetCode, target.name);
   };
 
-  // CÔNG TẮC KHẨN CẤP / CẮT NGUỒN ĐIỆN (CẬP NHẬT power_on & relay_control)
+  // CÔNG TẮC KHẨN CẤP / CẮT NGUỒN ĐIỆN (LUÔN Ở CHẾ ĐỘ KHẨN CẤP KHI NGẮT)
   const handleEmergencyCut = async (roomId: string, cutOff: boolean) => {
     const target = roomsRef.current.find((r) => r.id === roomId || r.code === roomId);
     if (!target) return;
@@ -687,12 +728,16 @@ export default function App() {
     const targetCode = target.code || target.id;
     const powerState = !cutOff;
     if (settings.soundEnabled) {
-      soundManager.playSwitch(powerState);
+      if (cutOff) {
+        soundManager.playEmergencyCut();
+      } else {
+        soundManager.playSwitch(true);
+      }
     }
 
     const updatedRoom: Room = {
       ...target,
-      emergencyPowerCut: false,
+      emergencyPowerCut: cutOff,
       isPowerOn: powerState,
       status: powerState ? 'on' : 'off',
       devices: powerState
@@ -724,36 +769,48 @@ export default function App() {
     await supabaseService.updatePower(targetCode, powerState);
 
     logActivity(
-      cutOff ? `Tắt nguồn điện ${target.name}` : `Bật nguồn điện ${target.name}`,
+      cutOff ? `🚨 [CẦU DAO TỔNG] Ngắt điện khẩn cấp ${target.name}` : `⚡ Đóng điện khôi phục ${target.name}`,
       targetCode,
       target.name
     );
   };
 
-  // CẮT / TẮT ĐIỆN TOÀN TRƯỜNG
-  const handleSchoolWidePowerCut = async (mode: 'emergency' | 'soft') => {
-    const isEmergency = mode === 'emergency';
-    const updatedRooms = rooms.map((r) => ({
+  // CẮT / TẮT ĐIỆN TOÀN TRƯỜNG (LUÔN Ở CHẾ ĐỘ KHẨN CẤP & KHÓA TOÀN BỘ 4 RELAY)
+  const handleSchoolWidePowerCut = async (_mode: 'emergency' | 'soft' = 'emergency') => {
+    const isEmergency = true;
+    const currentRooms = roomsRef.current;
+    const updatedRooms = currentRooms.map((r) => ({
       ...r,
       isPowerOn: false,
-      status: 'off' as const,
+      status: (r.hasFireAlarm ? 'alert' : 'off') as 'alert' | 'off',
       emergencyPowerCut: isEmergency,
       devices: {
         ...r.devices,
-        light: { ...r.devices.light, isOn: false },
+        light: { ...r.devices.light, isOn: false, brightness: 0, preset: 'off' as const },
         ac: { ...r.devices.ac, isOn: false },
         projector: { ...r.devices.projector, isOn: false },
-        fan: { ...r.devices.fan, isOn: false },
+        fan: { ...r.devices.fan, isOn: false, speed: 0 },
       },
+      relayControl: r.relayControl
+        ? {
+            ...r.relayControl,
+            relay1_den: false,
+            relay2_quat: false,
+            relay3_maychieu: false,
+            relay4_dieuhoa: false,
+            auto_mode: false,
+          }
+        : undefined,
       lastUpdated: 'Vừa xong',
     }));
 
+    roomsRef.current = updatedRooms;
     setRooms(updatedRooms);
 
-    // Cập nhật tất cả các phòng trên Supabase
-    rooms.forEach((r) => {
-      supabaseService.updatePower(r.code, false);
-    });
+    // Cập nhật tất cả các phòng và relay_control trên Supabase (tuần tự để tránh nghẽn kết nối)
+    for (const r of currentRooms) {
+      await supabaseService.updatePower(r.code || r.id, false);
+    }
 
     if (isEmergency) {
       if (settings.soundEnabled) {
@@ -762,24 +819,24 @@ export default function App() {
       const newAlert = await supabaseService.insertAlert({
         room_code: 'ALL',
         type: 'power_leak',
-        message: `🚨 [CẦU DAO TỔNG] Đã ngắt điện khẩn cấp toàn trường (${rooms.length} phòng học) bởi ${currentUser?.name || 'Giám thị'}!`,
+        message: `🚨 [CẦU DAO TỔNG] Đã ngắt điện khẩn cấp toàn trường (${currentRooms.length} phòng học) bởi ${currentUser?.name || 'Giám thị'}!`,
         level: 'critical',
       });
       if (newAlert) {
         setAlerts((prev) => [newAlert, ...prev]);
       }
-      logActivity(`🚨 CẮT ĐIỆN KHẨN CẤP TOÀN TRƯỜNG (${rooms.length} phòng học)`, 'ALL', 'Toàn trường');
+      logActivity(`🚨 CẮT ĐIỆN KHẨN CẤP TOÀN TRƯỜNG (${currentRooms.length} phòng học)`, 'ALL', 'Toàn trường');
       setDbSyncToast({
-        message: `ĐÃ CẮT ĐIỆN KHẨN CẤP TOÀN BỘ ${rooms.length} PHÒNG HỌC!`,
+        message: `ĐÃ CẮT ĐIỆN KHẨN CẤP TOÀN BỘ ${currentRooms.length} PHÒNG HỌC (ĐÃ KHÓA 4 RELAY)!`,
         type: 'error',
       });
     } else {
       if (settings.soundEnabled) {
         soundManager.playSwitch(false);
       }
-      logActivity(`Đã tắt toàn bộ thiết bị điện toàn trường (${rooms.length} phòng học) - Giờ nghỉ`, 'ALL', 'Toàn trường');
+      logActivity(`Đã tắt toàn bộ thiết bị điện toàn trường (${currentRooms.length} phòng học) - Giờ nghỉ`, 'ALL', 'Toàn trường');
       setDbSyncToast({
-        message: `Đã tắt thiết bị điện toàn trường thành công!`,
+        message: `Đã ngắt nguồn điện toàn trường & khóa 4 Relay thành công!`,
         type: 'success',
       });
     }
@@ -788,23 +845,25 @@ export default function App() {
 
   // KHÔI PHỤC ĐIỆN TOÀN TRƯỜNG
   const handleSchoolWidePowerRestore = async () => {
-    const updatedRooms = rooms.map((r) => ({
+    const currentRooms = roomsRef.current;
+    const updatedRooms = currentRooms.map((r) => ({
       ...r,
       isPowerOn: true,
-      status: 'on' as const,
+      status: (r.hasFireAlarm ? 'alert' : 'on') as 'alert' | 'on',
       emergencyPowerCut: false,
       lastUpdated: 'Vừa xong',
     }));
 
+    roomsRef.current = updatedRooms;
     setRooms(updatedRooms);
 
-    rooms.forEach((r) => {
-      supabaseService.updatePower(r.code, true);
-    });
+    for (const r of currentRooms) {
+      await supabaseService.updatePower(r.code || r.id, true);
+    }
 
     if (settings.soundEnabled) soundManager.playSwitch(true);
 
-    logActivity(`⚡ Khôi phục nguồn điện an toàn cho toàn bộ ${rooms.length} phòng học`, 'ALL', 'Toàn trường');
+    logActivity(`⚡ Khôi phục nguồn điện an toàn cho toàn bộ ${currentRooms.length} phòng học`, 'ALL', 'Toàn trường');
     setDbSyncToast({
       message: `Đã cấp điện an toàn cho toàn bộ phòng học!`,
       type: 'success',
@@ -899,7 +958,7 @@ export default function App() {
 
   // TẮT ĐIỆN PHÒNG TRỐNG
   const handleTurnOffEmptyRooms = () => {
-    const emptyPoweredRooms = rooms.filter((r) => r.status === 'off' || (!r.isOccupied && r.isPowerOn));
+    const emptyPoweredRooms = rooms.filter((r) => !r.isOccupied && r.isPowerOn);
     emptyPoweredRooms.forEach((r) => {
       supabaseService.updatePower(r.code, false);
     });
@@ -913,11 +972,21 @@ export default function App() {
             status: 'off',
             devices: {
               ...r.devices,
-              light: { ...r.devices.light, isOn: false },
+              light: { ...r.devices.light, isOn: false, brightness: 0, preset: 'off' },
               ac: { ...r.devices.ac, isOn: false },
               projector: { ...r.devices.projector, isOn: false },
-              fan: { ...r.devices.fan, isOn: false },
+              fan: { ...r.devices.fan, isOn: false, speed: 0 },
             },
+            relayControl: r.relayControl
+              ? {
+                  ...r.relayControl,
+                  relay1_den: false,
+                  relay2_quat: false,
+                  relay3_maychieu: false,
+                  relay4_dieuhoa: false,
+                  auto_mode: false,
+                }
+              : undefined,
           };
         }
         return r;
@@ -1027,12 +1096,19 @@ export default function App() {
         supabaseService.fetchAlerts(),
       ]);
 
-      const cleanAlerts = finalAlerts.filter(
-        (a) => !a.message.toLowerCase().includes('phòng này đã ngắt điện') &&
-               !a.message.toLowerCase().includes('cảm biến khói phát hiện nồng độ vượt ngưỡng (25 ppm') &&
-               !a.message.toLowerCase().includes('[test') &&
-               !a.message.toLowerCase().includes('test cảnh báo')
-      );
+      const cleanAlerts = finalAlerts.filter((a) => {
+        const msg = a.message.toLowerCase();
+        const type = String(a.type || '').toLowerCase();
+        return (
+          !msg.includes('phòng này đã ngắt điện') &&
+          !msg.includes('cảm biến khói phát hiện nồng độ vượt ngưỡng (25 ppm') &&
+          !msg.includes('[test') &&
+          !msg.includes('test cảnh báo') &&
+          type !== 'co' &&
+          type !== 'co2' &&
+          !/khí\s*co2?\b|\bco2\b|nồng độ\s*co\b|\bco\s*vượt/i.test(msg)
+        );
+      });
 
       setRooms(finalRooms);
       setAlerts(cleanAlerts);
@@ -1096,7 +1172,7 @@ export default function App() {
       soundManager.playSwitch(true);
     }
 
-    logActivity('✓ Đã tắt còi và đặt lại toàn bộ cảnh báo về trạng thái an toàn', 'ALL', 'Toàn trường');
+    logActivity('✓ Đã đặt lại toàn bộ cảnh báo về trạng thái an toàn', 'ALL', 'Toàn trường');
     setDbSyncToast({
       message: '✓ Đã xóa sạch cảnh báo và đưa toàn bộ phòng học về an toàn trong Database!',
       type: 'success',
@@ -1126,28 +1202,38 @@ export default function App() {
               devices: autoCutPower
                 ? {
                     ...r.devices,
-                    light: { ...r.devices.light, isOn: false },
+                    light: { ...r.devices.light, isOn: false, brightness: 0, preset: 'off' },
                     ac: { ...r.devices.ac, isOn: false },
                     projector: { ...r.devices.projector, isOn: false },
-                    fan: { ...r.devices.fan, isOn: false },
+                    fan: { ...r.devices.fan, isOn: false, speed: 0 },
                   }
                 : r.devices,
+              relayControl:
+                autoCutPower && r.relayControl
+                  ? {
+                      ...r.relayControl,
+                      relay1_den: false,
+                      relay2_quat: false,
+                      relay3_maychieu: false,
+                      relay4_dieuhoa: false,
+                      auto_mode: false,
+                      khan_cap: false,
+                    }
+                  : r.relayControl,
               lastUpdated: 'Vừa xong',
             }
           : r
       )
     );
 
-    // 2. Phát âm thanh còi hú báo cháy
-    if (settings.soundEnabled) {
-      soundManager.playFireSiren();
+    // 2. Đồng bộ vào Supabase (không kích hoạt còi hú)
+    if (autoCutPower) {
+      await supabaseService.updatePower(targetRoom.code, false);
     }
-
-    // 3. Đồng bộ vào Supabase
     await supabaseService.setRoomAlert(targetRoom.code, true, newPowerState, 550);
 
-    // 4. Ghi bản ghi cảnh báo
-    const alertMsg = `🚨 BÁO CHÁY KHẨN CẤP tại ${targetRoom.name}! Nồng độ khói 550 ppm. Còi hú đang phát tín hiệu.${
+    // 3. Ghi bản ghi cảnh báo
+    const alertMsg = `🚨 CẢNH BÁO CHÁY tại ${targetRoom.name}! Nồng độ khói 550 ppm.${
       autoCutPower ? ' Hệ thống đã tự động ngắt điện phòng.' : ''
     }`;
     const newAlert = await supabaseService.insertAlert({
@@ -1161,9 +1247,9 @@ export default function App() {
       setAlerts((prev) => [newAlert, ...prev]);
     }
 
-    logActivity(`🔥 Báo cháy khẩn cấp tại ${targetRoom.name}`, targetRoom.code, targetRoom.name);
+    logActivity(`🔥 Cảnh báo cháy tại ${targetRoom.name}`, targetRoom.code, targetRoom.name);
     setDbSyncToast({
-      message: `🚨 Đang báo cháy tại ${targetRoom.name}! Còi báo động đang kêu.`,
+      message: `🚨 Cảnh báo cháy tại ${targetRoom.name}!`,
       type: 'error',
     });
   };
@@ -1209,7 +1295,7 @@ export default function App() {
       soundManager.playSwitch(true);
     }
 
-    logActivity(`✓ Đã tắt còi và đặt lại an toàn cho ${targetRoom.name}`, targetRoom.code, targetRoom.name);
+    logActivity(`✓ Đã đặt lại trạng thái an toàn cho ${targetRoom.name}`, targetRoom.code, targetRoom.name);
     setDbSyncToast({
       message: `Đã khôi phục trạng thái an toàn cho ${targetRoom.name} trong Database!`,
       type: 'success',
@@ -1306,6 +1392,7 @@ export default function App() {
       if (rule.action === 'turn_off_all') {
         await supabaseService.updatePower(code, false);
       } else if (rule.action === 'turn_on_ac') {
+        if (!r.isPowerOn || r.emergencyPowerCut) continue;
         await supabaseService.updateAc(code, true, 24, 'cool');
       } else if (rule.action === 'turn_off_ac_proj') {
         await supabaseService.updateRelayControl(code, {
@@ -1531,7 +1618,7 @@ export default function App() {
                 Phát hiện sự cố cháy tại {activeCriticalRoom.name} (Khói: {activeCriticalRoom.smokeLevel} ppm, Nhiệt độ: {activeCriticalRoom.temperature.toFixed(1)}°C)
               </p>
               <p className="text-[11px] text-red-100 mt-0.5">
-                Cảm biến PCCC vượt ngưỡng an toàn. Còi hú đang phát tín hiệu cảnh báo sơ tán.
+                Cảm biến PCCC vượt ngưỡng an toàn. Vui lòng kiểm tra phòng học.
               </p>
             </div>
           </div>
@@ -1546,7 +1633,7 @@ export default function App() {
               onClick={() => handleClearFireAlarmForRoom(activeCriticalRoom.code || activeCriticalRoom.id)}
               className="px-3 py-1 bg-red-800/90 hover:bg-red-900 text-white rounded-xl text-[11px] font-semibold transition-colors active:scale-95 whitespace-nowrap"
             >
-              Tắt còi
+              Đặt lại
             </button>
           </div>
         </div>

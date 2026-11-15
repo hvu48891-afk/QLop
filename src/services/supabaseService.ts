@@ -121,13 +121,48 @@ class SupabaseService {
     };
   }
 
+  private isNetworkError(msg?: string): boolean {
+    if (!msg) return false;
+    const lower = msg.toLowerCase();
+    return (
+      lower.includes('failed to fetch') ||
+      lower.includes('networkerror') ||
+      lower.includes('load failed') ||
+      lower.includes('fetch') ||
+      lower.includes('network')
+    );
+  }
+
+  private async runWithRetry<T extends { error?: { message?: string } | null }>(
+    op: () => Promise<T>,
+    retries: number = 2
+  ): Promise<T> {
+    let lastResult: T | null = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await op();
+        if (!res?.error || !this.isNetworkError(res.error.message) || attempt === retries) {
+          return res;
+        }
+        lastResult = res;
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (!this.isNetworkError(msg) || attempt === retries) {
+          throw err;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    }
+    return lastResult!;
+  }
+
   private notifyWriteEvent(event: Omit<WriteEvent, 'timestamp'>) {
     const fullEvent: WriteEvent = { ...event, timestamp: new Date().toLocaleTimeString('vi-VN') };
     this.writeListeners.forEach((listener) => {
       try {
         listener(fullEvent);
       } catch (err) {
-        console.error('[SupabaseService] Lỗi listener:', err);
+        console.warn('[SupabaseService] Lỗi listener:', err);
       }
     });
   }
@@ -403,30 +438,42 @@ class SupabaseService {
    * Gắn dữ liệu từ bảng relay_control vào Room trên giao diện
    */
   public mergeRelayControlToRoom(room: Room, rc: DbRelayControl): Room {
+    const isMasterCut = !room.isPowerOn || room.emergencyPowerCut;
+    const effectiveRc: DbRelayControl = isMasterCut
+      ? {
+          ...rc,
+          relay1_den: false,
+          relay2_quat: false,
+          relay3_maychieu: false,
+          relay4_dieuhoa: false,
+          auto_mode: false,
+        }
+      : rc;
+
     return {
       ...room,
-      relayControl: rc,
-      relayAlarm: rc.khan_cap || room.relayAlarm,
+      relayControl: effectiveRc,
+      relayAlarm: false,
       devices: {
         ...room.devices,
         light: {
           ...room.devices.light,
-          isOn: Boolean(rc.relay1_den),
-          brightness: rc.relay1_den ? (room.devices.light.brightness || 85) : 0,
-          preset: rc.relay1_den ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
+          isOn: Boolean(effectiveRc.relay1_den),
+          brightness: effectiveRc.relay1_den ? (room.devices.light.brightness || 85) : 0,
+          preset: effectiveRc.relay1_den ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
         },
         fan: {
           ...room.devices.fan,
-          isOn: Boolean(rc.relay2_quat),
-          speed: rc.relay2_quat ? (room.devices.fan.speed || 2) : 0,
+          isOn: Boolean(effectiveRc.relay2_quat),
+          speed: effectiveRc.relay2_quat ? (room.devices.fan.speed || 2) : 0,
         },
         projector: {
           ...room.devices.projector,
-          isOn: Boolean(rc.relay3_maychieu),
+          isOn: Boolean(effectiveRc.relay3_maychieu),
         },
         ac: {
           ...room.devices.ac,
-          isOn: Boolean(rc.relay4_dieuhoa),
+          isOn: Boolean(effectiveRc.relay4_dieuhoa),
         },
       },
     };
@@ -445,23 +492,34 @@ class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from('relay_control')
-        .update(payload)
-        .eq('room_code', code)
-        .select();
+      const { data, error } = await this.runWithRetry(async () =>
+        supabase
+          .from('relay_control')
+          .update(payload)
+          .eq('room_code', code)
+          .select()
+      );
 
       if (error) {
-        console.error(`[Supabase updateRelayControl] Lỗi cập nhật relay_control (${code}):`, error.message);
+        const isNetErr = this.isNetworkError(error.message);
+        if (isNetErr) {
+          this.status.isConnected = false;
+          this.status.error = 'Mất kết nối mạng tạm thời tới Supabase';
+          console.warn(`[Supabase updateRelayControl] Kết nối mạng tạm thời gián đoạn (${code}):`, error.message);
+        } else {
+          console.warn(`[Supabase updateRelayControl] Lỗi cập nhật relay_control (${code}):`, error.message);
+        }
         this.notifyWriteEvent({
           table: 'relay_control',
           code,
           action: `Cập nhật relay_control (${code})`,
           success: false,
-          error: error.message,
+          error: isNetErr ? 'Mất kết nối mạng tới Supabase (vui lòng thử lại)' : error.message,
         });
         return { success: false, row: null, error: error.message };
       }
+
+      this.status.isConnected = true;
 
       if (data && data.length > 0) {
         return { success: true, row: data[0] as DbRelayControl };
@@ -479,20 +537,23 @@ class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      const { data: insData, error: insErr } = await supabase
-        .from('relay_control')
-        .insert([insertPayload])
-        .select()
-        .single();
+      const { data: insData, error: insErr } = await this.runWithRetry(async () =>
+        supabase
+          .from('relay_control')
+          .insert([insertPayload])
+          .select()
+          .single()
+      );
 
       if (insErr) {
-        console.error(`[Supabase updateRelayControl] Lỗi tạo dòng relay_control (${code}):`, insErr.message);
+        console.warn(`[Supabase updateRelayControl] Lỗi tạo dòng relay_control (${code}):`, insErr.message);
         return { success: false, row: null, error: insErr.message };
       }
 
       return { success: true, row: (insData as DbRelayControl) || null };
     } catch (err: any) {
-      console.error(`[Supabase updateRelayControl] Ngoại lệ (${code}):`, err);
+      this.status.isConnected = false;
+      console.warn(`[Supabase updateRelayControl] Gián đoạn mạng (${code}):`, err?.message || err);
       return { success: false, row: null, error: err?.message || 'Lỗi ngoại lệ mạng Supabase' };
     }
   }
@@ -696,18 +757,27 @@ class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      // 1. Thử cập nhật theo code với .select() để kiểm tra kết quả thực tế
-      const { data, error } = await supabase
-        .from('rooms')
-        .update(payload)
-        .eq('code', code)
-        .select();
+      // 1. Thử cập nhật theo code với .select() để kiểm tra kết quả thực tế (có tự động thử lại nếu lỗi mạng)
+      const { data, error } = await this.runWithRetry(async () =>
+        supabase
+          .from('rooms')
+          .update(payload)
+          .eq('code', code)
+          .select()
+      );
 
       if (error) {
-        console.error(`[Supabase updateRoom] Lỗi cập nhật phòng ${code}:`, error.message);
+        const isNetErr = this.isNetworkError(error.message);
         const isRls = error.code === '42501' || 
                       error.message.toLowerCase().includes('row-level security') || 
                       error.message.toLowerCase().includes('policy');
+        if (isNetErr) {
+          this.status.isConnected = false;
+          this.status.error = 'Mất kết nối mạng tạm thời tới Supabase';
+          console.warn(`[Supabase updateRoom] Kết nối mạng tạm thời gián đoạn (${code}):`, error.message);
+        } else {
+          console.warn(`[Supabase updateRoom] Lỗi cập nhật phòng ${code}:`, error.message);
+        }
         if (isRls) {
           this.status.rlsRestricted = true;
           this.status.error = 'Supabase đang bật RLS (42501) chặn quyền ghi: ' + error.message;
@@ -718,10 +788,12 @@ class SupabaseService {
           action: 'Cập nhật phòng ' + code,
           success: false,
           rlsError: isRls,
-          error: error.message,
+          error: isNetErr ? 'Mất kết nối mạng tới Supabase (vui lòng thử lại)' : error.message,
         });
         return false;
       }
+
+      this.status.isConnected = true;
 
       // 2. Nếu update thành công và có dòng bị ảnh hưởng
       if (data && data.length > 0) {
@@ -740,13 +812,15 @@ class SupabaseService {
       // Tự động INSERT bản ghi phòng vào Supabase
       console.log(`[Supabase updateRoom] Phòng ${code} chưa có trong database, đang tạo mới bản ghi...`);
       const insertPayload = this.buildInsertRoomPayload(code, payload);
-      const { data: insertedData, error: insertError } = await supabase
-        .from('rooms')
-        .insert([insertPayload])
-        .select();
+      const { error: insertError } = await this.runWithRetry(async () =>
+        supabase
+          .from('rooms')
+          .insert([insertPayload])
+          .select()
+      );
 
       if (insertError) {
-        console.error(`[Supabase updateRoom] Lỗi tạo phòng mới ${code}:`, insertError.message);
+        console.warn(`[Supabase updateRoom] Lỗi tạo phòng mới ${code}:`, insertError.message);
         const isRls = insertError.code === '42501' || 
                       insertError.message.toLowerCase().includes('row-level security');
         if (isRls) {
@@ -774,7 +848,8 @@ class SupabaseService {
       });
       return true;
     } catch (err: any) {
-      console.error(`[Supabase updateRoom] Ngoại lệ khi cập nhật phòng ${code}:`, err);
+      this.status.isConnected = false;
+      console.warn(`[Supabase updateRoom] Gián đoạn mạng (${code}):`, err?.message || err);
       this.notifyWriteEvent({
         table: 'rooms',
         code,
@@ -912,13 +987,13 @@ class SupabaseService {
       await this.clearAlertsForRoom(code);
     }
 
-    await this.updateRelayControl(code, { khan_cap: isAlert });
+    await this.updateRelayControl(code, { khan_cap: false });
 
     return this.updateRoom(code, {
       status: isAlert ? 'alert' : powerOnState ? 'on' : 'off',
       smoke_level: level,
       flame: isAlert,
-      relay_alarm: isAlert,
+      relay_alarm: false,
     });
   }
 
