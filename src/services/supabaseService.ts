@@ -294,22 +294,91 @@ class SupabaseService {
   }
 
   /**
-   * Helper chuyển đổi DbSchedule sang ScheduleRule
+   * Mã hóa thông tin lịch sự kiện theo ngày vào cột name của bảng schedules
+   * (Giữ tương thích 100% với schema Supabase hiện tại)
+   */
+  public serializeScheduleName(rule: {
+    title: string;
+    scheduleType?: 'recurring' | 'event';
+    eventDate?: string;
+    eventCategory?: string;
+    endTime?: string;
+  }): string {
+    const cleanTitle = (rule.title || '').trim();
+    if (rule.scheduleType === 'event' && rule.eventDate) {
+      const cat = rule.eventCategory || 'ceremony';
+      const end = rule.endTime || '';
+      return `[EVT:${rule.eventDate}|${cat}|${end}] ${cleanTitle}`;
+    }
+    return cleanTitle;
+  }
+
+  /**
+   * Helper chuyển đổi DbSchedule sang ScheduleRule (hỗ trợ cả Lịch định kỳ và Lịch sự kiện theo ngày)
    */
   public mapDbScheduleToRule(row: DbSchedule): ScheduleRule {
     const cleanTime = String(row.run_time || '17:30').slice(0, 5);
+    const rawName = String(row.name || '').trim();
+    const targetName =
+      row.target === 'all'
+        ? 'Toàn bộ trường'
+        : row.scope === 'building'
+        ? `${row.target}`
+        : `Phòng ${row.target}`;
+
+    const actionTextMap: Record<string, string> = {
+      turn_off_all: 'Tắt toàn bộ điện',
+      turn_off_ac_proj: 'Tắt điều hòa & máy chiếu',
+      turn_on_ac: 'Bật điều hòa 24°C',
+      mode_study: 'Bật chế độ học tập',
+      mode_presentation: 'Bật chế độ sự kiện / trình chiếu',
+    };
+    const actionLabel = actionTextMap[row.action] || row.action;
+
+    const evtMatch = rawName.match(
+      /^\[EVT:(\d{4}-\d{2}-\d{2})(?:\|([a-z_]*))?(?:\|(\d{2}:\d{2})?)?\]\s*(.+)$/i
+    );
+
+    if (evtMatch) {
+      const eventDate = evtMatch[1];
+      const eventCategory = (evtMatch[2] || 'ceremony') as ScheduleRule['eventCategory'];
+      const endTime = evtMatch[3] || undefined;
+      const cleanTitle = evtMatch[4].trim();
+      const [y, m, d] = eventDate.split('-');
+      const vnDate = `${d}/${m}/${y}`;
+
+      return {
+        id: String(row.id),
+        title: cleanTitle,
+        name: rawName,
+        scheduleType: 'event',
+        eventDate,
+        endTime,
+        eventCategory,
+        scope: row.scope || 'all',
+        targetId: row.target || 'all',
+        targetName,
+        action: row.action || 'turn_off_all',
+        time: cleanTime,
+        daysOfWeek: Array.isArray(row.days) ? row.days : [new Date(`${eventDate}T00:00:00`).getDay()],
+        isEnabled: Boolean(row.enabled),
+        description: `Sự kiện ngày ${vnDate} (${cleanTime}${endTime ? ` - ${endTime}` : ''}) • ${actionLabel} tại ${targetName}`,
+      };
+    }
+
     return {
       id: String(row.id),
-      title: row.name,
-      name: row.name,
+      title: rawName,
+      name: rawName,
+      scheduleType: 'recurring',
       scope: row.scope || 'all',
       targetId: row.target || 'all',
-      targetName: row.target === 'all' ? 'Toàn trường' : `Tòa/Phòng ${row.target}`,
+      targetName,
       action: row.action || 'turn_off_all',
       time: cleanTime,
       daysOfWeek: Array.isArray(row.days) ? row.days : [1, 2, 3, 4, 5, 6],
       isEnabled: Boolean(row.enabled),
-      description: `Quy tắc ${row.name} thực thi lúc ${cleanTime}`,
+      description: `${actionLabel} tại ${targetName} lúc ${cleanTime}`,
     };
   }
 

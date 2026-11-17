@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Zap, 
   DoorClosed, 
@@ -28,9 +28,11 @@ import {
   Thermometer,
   Droplets,
   Cpu,
-  Lock
+  Lock,
+  Calendar,
+  CalendarClock
 } from 'lucide-react';
-import { Room, AlertLog, ActivityLog, DbSensorData, User } from '../types';
+import { Room, AlertLog, ActivityLog, DbSensorData, User, ScheduleRule } from '../types';
 import { parseAirQuality } from '../utils/airQuality';
 
 interface DashboardTabProps {
@@ -49,6 +51,10 @@ interface DashboardTabProps {
   isPushingDb?: boolean;
   onOpenSchoolPowerModal?: () => void;
   dbRoomCount?: number;
+  timeInfo?: import('../services/timeSyncService').TimeSyncInfo;
+  onOpenTimeSyncModal?: () => void;
+  rules?: ScheduleRule[];
+  onNavigateToSchedules?: () => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -67,10 +73,55 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   isPushingDb,
   onOpenSchoolPowerModal,
   dbRoomCount,
+  timeInfo,
+  onOpenTimeSyncModal,
+  rules = [],
+  onNavigateToSchedules,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
   // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
   const [alertViewMode, setAlertViewMode] = useState<'unresolved' | 'resolved'>('unresolved');
+  const [nowFallback, setNowFallback] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowFallback(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const activeNow = timeInfo ? timeInfo.currentTime : nowFallback;
+  const liveHourMinute = activeNow.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const liveSeconds = activeNow.toLocaleTimeString('vi-VN', {
+    second: '2-digit',
+  }).padStart(2, '0');
+  const liveDateFull = activeNow.toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+
+  const todayISO = `${activeNow.getFullYear()}-${String(activeNow.getMonth() + 1).padStart(2, '0')}-${String(
+    activeNow.getDate()
+  ).padStart(2, '0')}`;
+  const todayDow = activeNow.getDay();
+
+  const todayScheduledItems = rules
+    .filter((r) => {
+      if (!r.isEnabled) return false;
+      if (r.scheduleType === 'event' && r.eventDate) return r.eventDate === todayISO;
+      return r.daysOfWeek.includes(todayDow);
+    })
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  const upcomingDatedEvents = rules
+    .filter((r) => r.isEnabled && r.scheduleType === 'event' && Boolean(r.eventDate) && (r.eventDate || '') >= todayISO)
+    .sort((a, b) => {
+      const cmp = (a.eventDate || '').localeCompare(b.eventDate || '');
+      return cmp !== 0 ? cmp : a.time.localeCompare(b.time);
+    });
 
   // Stats calculation theo đúng đặc tả Supabase
   const totalRooms = rooms.length;
@@ -92,6 +143,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   return (
     <div className="space-y-6 pb-24 lg:pb-12">
+      {/* ================= LIVE DATE & TIME STRIP ================= */}
+      <div className="p-4 sm:px-5 sm:py-4 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400 flex items-center justify-center shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Ngày tháng & Thời gian hệ thống
+            </p>
+            <p className="text-sm sm:text-base font-bold text-white capitalize mt-0.5">
+              {liveDateFull}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-0 border-slate-800/80">
+          <div className="flex items-baseline gap-1 px-3.5 py-2 rounded-2xl bg-slate-950 border border-slate-800">
+            <Clock className="w-4 h-4 text-orange-400 self-center mr-1.5" />
+            <span className="text-2xl sm:text-3xl font-black font-mono text-orange-400 tracking-tight tabular-nums leading-none">
+              {liveHourMinute}
+            </span>
+            <span className="text-sm font-bold font-mono text-slate-400 tabular-nums">
+              :{liveSeconds}
+            </span>
+          </div>
+
+          {onOpenTimeSyncModal && (
+            <button
+              type="button"
+              onClick={onOpenTimeSyncModal}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-all active:scale-95 whitespace-nowrap"
+            >
+              Đồng bộ giờ
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* ================= 1. STATS METRICS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {/* Card 1: Số phòng đang mở điện */}
@@ -250,6 +340,98 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
       </div>
 
+      {/* ================= LỊCH SỰ KIỆN HÔM NAY & SẮP TỚI ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center">
+              <CalendarClock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-base">
+                Lịch sự kiện hôm nay & sắp tới
+              </h3>
+              <p className="text-xs text-slate-400">
+                {todayScheduledItems.length} lịch chạy trong hôm nay ({activeNow.toLocaleDateString('vi-VN')}) • {upcomingDatedEvents.length} sự kiện theo ngày sắp tới
+              </p>
+            </div>
+          </div>
+
+          {onNavigateToSchedules && (
+            <button
+              type="button"
+              onClick={onNavigateToSchedules}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-orange-300 text-xs font-bold flex items-center gap-1 transition-colors"
+            >
+              <span>Mở Lịch sự kiện</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {todayScheduledItems.length > 0 || upcomingDatedEvents.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {(upcomingDatedEvents.length > 0 ? upcomingDatedEvents : todayScheduledItems)
+              .slice(0, 6)
+              .map((ev) => {
+                const isEvt = ev.scheduleType === 'event' && Boolean(ev.eventDate);
+                const isTodayEvt = ev.eventDate === todayISO || !isEvt;
+                const dateDisplay = isEvt && ev.eventDate
+                  ? `${ev.eventDate.split('-').reverse().join('/')}`
+                  : 'Hôm nay';
+                return (
+                  <div
+                    key={ev.id}
+                    className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                      isEvt
+                        ? 'bg-purple-950/20 border-purple-500/30'
+                        : 'bg-slate-950/70 border-slate-800/80'
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                            isEvt
+                              ? 'bg-purple-500/20 text-purple-300'
+                              : 'bg-orange-500/20 text-orange-300'
+                          }`}
+                        >
+                          {isEvt ? (ev.eventDate === todayISO ? 'Sự kiện hôm nay' : dateDisplay) : 'Định kỳ'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 truncate">{ev.targetName}</span>
+                      </div>
+                      <p className="text-xs font-bold text-white truncate">{ev.title}</p>
+                    </div>
+                    <span
+                      className={`font-mono text-xs font-black px-2 py-1 rounded-lg shrink-0 ${
+                        isTodayEvt
+                          ? 'bg-orange-500/20 text-orange-400'
+                          : 'bg-slate-900 text-slate-300'
+                      }`}
+                    >
+                      {ev.time}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        ) : (
+          <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-400 flex items-center justify-between gap-3">
+            <span>Chưa có sự kiện nào được lên lịch cho hôm nay.</span>
+            {onNavigateToSchedules && (
+              <button
+                type="button"
+                onClick={onNavigateToSchedules}
+                className="text-orange-400 hover:text-orange-300 font-bold whitespace-nowrap"
+              >
+                + Tạo sự kiện
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ================= 2. BẢNG DỮ LIỆU CẢM BIẾN REALTIME (BẢNG sensor_data SUPABASE) ================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
@@ -303,8 +485,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
                   const gasVal = Number(log.gas) || 0;
                   const air = parseAirQuality(log.clkk);
-                  const timeFormatted = log.created_at
-                    ? new Date(log.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                  const createdAtDate = log.created_at ? new Date(log.created_at) : null;
+                  const timeFormatted = createdAtDate
+                    ? `${createdAtDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • ${createdAtDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
                     : 'Vừa xong';
 
                   return (

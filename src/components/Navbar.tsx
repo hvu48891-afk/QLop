@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   DoorOpen, 
@@ -12,7 +12,9 @@ import {
   Cpu, 
   ShieldAlert, 
   Flame,
-  Radio
+  Radio,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { TabType, User } from '../types';
 
@@ -22,6 +24,7 @@ interface NavbarProps {
   currentUser: User | null;
   activeAlarmCount: number;
   mqttStatus: { status: string; latency: number };
+  timeInfo?: import('../services/timeSyncService').TimeSyncInfo;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,7 +33,27 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   activeAlarmCount,
   mqttStatus,
+  timeInfo,
 }) => {
+  const [nowFallback, setNowFallback] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowFallback(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const activeNow = timeInfo ? timeInfo.currentTime : nowFallback;
+  const sidebarTime = activeNow.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const sidebarDate = activeNow.toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
   const navItems = [
     {
       id: 'dashboard' as TabType,
@@ -47,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'schedules' as TabType,
-      label: 'Lập lịch',
+      label: 'Lịch sự kiện',
       icon: CalendarClock,
     },
     {
@@ -129,6 +152,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             </p>
           </div>
         )}
+
+        {/* Live Date & Time Sidebar Card */}
+        <div className="mb-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-orange-400" />
+              Giờ hiện tại
+            </span>
+            <span className="text-sm font-mono font-bold text-orange-400 tabular-nums">
+              {sidebarTime}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-medium capitalize">
+            <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+            <span className="truncate">{sidebarDate}</span>
+          </div>
+        </div>
 
         {/* MQTT Status Indicator Footer */}
         <div className="mt-auto pt-4 border-t border-slate-800/80">

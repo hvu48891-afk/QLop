@@ -401,10 +401,15 @@ export default function App() {
     return () => clearInterval(sensorPoller);
   }, []);
 
-  // 5. ĐỒNG BỘ THỜI GIAN THẬT & TỰ ĐỘNG HÓA LẬP LỊCH
+  // 5. ĐỒNG BỘ THỜI GIAN THẬT & TỰ ĐỘNG HÓA LẬP LỊCH SỰ KIỆN
   useEffect(() => {
     const unsubscribeTime = timeSyncService.subscribe((currentTime, info) => {
       setTimeInfo(info);
+
+      const year = currentTime.getFullYear();
+      const month = String(currentTime.getMonth() + 1).padStart(2, '0');
+      const day = String(currentTime.getDate()).padStart(2, '0');
+      const todayISO = `${year}-${month}-${day}`;
 
       const hours = currentTime.getHours().toString().padStart(2, '0');
       const minutes = currentTime.getMinutes().toString().padStart(2, '0');
@@ -414,10 +419,15 @@ export default function App() {
       const activeRules = rulesRef.current;
       activeRules.forEach((rule) => {
         if (!rule.isEnabled) return;
-        if (!rule.daysOfWeek.includes(currentDayOfWeek)) return;
         if (rule.time !== currentHHmm) return;
 
-        const triggerKey = `${rule.id}-${currentHHmm}-${currentTime.getDate()}`;
+        if (rule.scheduleType === 'event' && rule.eventDate) {
+          if (rule.eventDate !== todayISO) return;
+        } else {
+          if (!rule.daysOfWeek.includes(currentDayOfWeek)) return;
+        }
+
+        const triggerKey = `${rule.id}-${todayISO}-${currentHHmm}`;
         if (executedMinutesRef.current[triggerKey]) return;
 
         executedMinutesRef.current[triggerKey] = true;
@@ -1324,15 +1334,21 @@ export default function App() {
 
   const handleSaveRule = async (savedRule: ScheduleRule) => {
     const exists = rules.some((r) => r.id === savedRule.id);
+    const serializedName = supabaseService.serializeScheduleName(savedRule);
+    const daysPayload =
+      savedRule.scheduleType === 'event' && savedRule.eventDate
+        ? [new Date(`${savedRule.eventDate}T00:00:00`).getDay()]
+        : savedRule.daysOfWeek;
+
     if (exists) {
       setRules((prev) => prev.map((r) => (r.id === savedRule.id ? savedRule : r)));
       const ok = await supabaseService.updateSchedule(savedRule.id, {
-        name: savedRule.title,
+        name: serializedName,
         scope: savedRule.scope,
         target: savedRule.targetId,
         action: savedRule.action,
         run_time: savedRule.time,
-        days: savedRule.daysOfWeek,
+        days: daysPayload,
         enabled: savedRule.isEnabled,
       });
       if (!ok) {
@@ -1342,12 +1358,12 @@ export default function App() {
       }
     } else {
       const inserted = await supabaseService.insertSchedule({
-        name: savedRule.title,
+        name: serializedName,
         scope: savedRule.scope,
         target: savedRule.targetId,
         action: savedRule.action,
         run_time: savedRule.time,
-        days: savedRule.daysOfWeek,
+        days: daysPayload,
         enabled: savedRule.isEnabled,
       });
       if (inserted) {
@@ -1356,7 +1372,7 @@ export default function App() {
         return;
       }
     }
-    logActivity(`Lưu quy tắc "${savedRule.title}" vào Supabase`, 'RULE', savedRule.title);
+    logActivity(`Lưu lịch "${savedRule.title}" vào Supabase`, 'RULE', savedRule.title);
   };
 
   const handleDeleteRule = async (ruleId: string) => {
@@ -1365,7 +1381,7 @@ export default function App() {
     const ok = await supabaseService.deleteSchedule(ruleId);
     if (ok) {
       if (rule) {
-        logActivity(`Xóa quy tắc "${rule.title}" khỏi Supabase`, 'RULE', rule.title);
+        logActivity(`Xóa lịch "${rule.title}" khỏi Supabase`, 'RULE', rule.title);
       }
     } else {
       const fresh = await supabaseService.fetchSchedules();
@@ -1373,7 +1389,7 @@ export default function App() {
     }
   };
 
-  // THỰC THI QUY TẮC (ĐỒNG BỘ CẢ relay_control VÀ rooms)
+  // THỰC THI QUY TẮC / SỰ KIỆN (ĐỒNG BỘ CẢ relay_control VÀ rooms)
   const handleTriggerRuleNow = async (rule: ScheduleRule, isAuto: boolean = false) => {
     if (settings.soundEnabled) {
       if (isAuto) soundManager.playSwitch(true);
@@ -1402,6 +1418,7 @@ export default function App() {
         });
         await supabaseService.updateRoom(code, { ac_on: false, projector_on: false });
       } else if (rule.action === 'mode_study') {
+        if (!r.isPowerOn || r.emergencyPowerCut) continue;
         await supabaseService.updateRelayControl(code, {
           relay1_den: true,
           relay2_quat: true,
@@ -1413,6 +1430,24 @@ export default function App() {
           light_on: true,
           light_mode: 'study',
           fan_on: true,
+        });
+      } else if (rule.action === 'mode_presentation') {
+        if (!r.isPowerOn || r.emergencyPowerCut) continue;
+        await supabaseService.updateRelayControl(code, {
+          relay1_den: true,
+          relay3_maychieu: true,
+          relay4_dieuhoa: true,
+          auto_mode: false,
+        });
+        await supabaseService.updateRoom(code, {
+          power_on: true,
+          status: 'on',
+          light_on: true,
+          light_mode: 'presentation',
+          projector_on: true,
+          ac_on: true,
+          ac_temp: 24,
+          ac_mode: 'cool',
         });
       }
     }
@@ -1650,6 +1685,7 @@ export default function App() {
           currentUser={currentUser}
           activeAlarmCount={activeAlarmCount}
           mqttStatus={mqttStatus}
+          timeInfo={timeInfo}
         />
 
         {/* Right Main Content Area */}
@@ -1784,6 +1820,10 @@ export default function App() {
                       }
                     }}
                     dbRoomCount={rooms.length}
+                    timeInfo={timeInfo}
+                    onOpenTimeSyncModal={() => setIsTimeModalOpen(true)}
+                    rules={rules}
+                    onNavigateToSchedules={() => setCurrentTab('schedules')}
                   />
                 )}
 

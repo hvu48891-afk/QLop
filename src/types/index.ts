@@ -181,10 +181,13 @@ export interface AlertLog {
 }
 
 export type ScheduleScope = 'all' | 'building' | 'room';
+export type ScheduleType = 'recurring' | 'event';
+export type EventCategory = 'class' | 'exam' | 'ceremony' | 'maintenance' | 'holiday';
 export type ScheduleAction = 
   | 'turn_off_all' 
   | 'turn_off_ac_proj' 
   | 'mode_study' 
+  | 'mode_presentation'
   | 'turn_on_ac'
   | string;
 
@@ -192,6 +195,10 @@ export interface ScheduleRule {
   id: string;
   title: string;
   name?: string;
+  scheduleType?: ScheduleType;
+  eventDate?: string; // "YYYY-MM-DD" cho lịch sự kiện theo ngày cụ thể
+  endTime?: string; // "HH:mm" tùy chọn giờ kết thúc
+  eventCategory?: EventCategory;
   scope: ScheduleScope;
   targetId: string; // 'all' | 'A' | 'B' | 'A201'
   targetName: string;

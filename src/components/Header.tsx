@@ -20,7 +20,8 @@ import {
   RefreshCw,
   Database,
   Palette,
-  Lock
+  Lock,
+  Calendar
 } from 'lucide-react';
 import { User, TabType } from '../types';
 
@@ -61,26 +62,34 @@ export const Header: React.FC<HeaderProps> = ({
   onSyncDatabase,
   isSyncing = false,
 }) => {
-  const [currentTime, setCurrentTime] = useState<string>('');
-  const [currentDate, setCurrentDate] = useState<string>('');
+  const [nowFallback, setNowFallback] = useState<Date>(() => new Date());
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(
-        now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      );
-      setCurrentDate(
-        now.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
-      );
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
+    const interval = setInterval(() => {
+      setNowFallback(new Date());
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const activeNow = timeInfo ? timeInfo.currentTime : nowFallback;
+  const formattedTime = activeNow.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const formattedDateShort = activeNow.toLocaleDateString('vi-VN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const formattedDateCompact = activeNow.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 
   const tabTitles: Record<TabType, { title: string; subtitle: string }> = {
     dashboard: {
@@ -92,8 +101,8 @@ export const Header: React.FC<HeaderProps> = ({
       subtitle: 'Giám sát và điều khiển thiết bị từng phòng (A201, 301, 302...)',
     },
     schedules: {
-      title: 'Lập lịch & Tự động hóa',
-      subtitle: 'Quy tắc hẹn giờ tắt/bật thiết bị, quản lý lịch học tiết kiệm điện',
+      title: 'Lịch sự kiện & Tự động hóa',
+      subtitle: 'Quản lý lịch sự kiện theo ngày, lịch học tuần và tự động điều khiển thiết bị',
     },
     settings: {
       title: 'Cài đặt hệ thống',
@@ -132,19 +141,23 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Simulator Bar + Time + User dropdown */}
       <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-        {/* Realtime Clock & Sync Button */}
+        {/* Realtime Date & Clock Sync Button */}
         <button
           onClick={onOpenTimeSyncModal}
-          title="Đồng bộ giờ chuẩn NTP từ máy chủ thời gian thực"
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 rounded-xl text-right transition-all group active:scale-95"
+          title="Xem chi tiết & đồng bộ ngày giờ chuẩn NTP từ máy chủ thời gian thực"
+          className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 rounded-xl text-right transition-all group active:scale-95"
         >
-          <Clock className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+          <div className="flex items-center gap-1 text-orange-400">
+            <Clock className="w-4 h-4 group-hover:scale-110 transition-transform" />
+          </div>
           <div className="flex flex-col items-end">
-            <span className="text-xs font-mono font-bold text-orange-400">
-              {timeInfo ? timeInfo.currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : currentTime}
+            <span className="text-xs sm:text-sm font-mono font-bold text-orange-400 leading-tight tabular-nums">
+              {formattedTime}
             </span>
-            <span className="text-[10px] text-slate-400 leading-none group-hover:text-orange-300 transition-colors">
-              Giờ NTP Realtime
+            <span className="text-[10px] sm:text-[11px] font-medium text-slate-300 leading-tight flex items-center gap-1 group-hover:text-orange-300 transition-colors tabular-nums">
+              <Calendar className="w-2.5 h-2.5 text-slate-400 hidden sm:inline" />
+              <span className="hidden sm:inline">{formattedDateShort}</span>
+              <span className="sm:hidden">{formattedDateCompact}</span>
             </span>
           </div>
         </button>
