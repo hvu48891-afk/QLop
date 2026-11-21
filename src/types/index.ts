@@ -61,7 +61,9 @@ export interface Room {
   temperature: number; // °C
   humidity: number; // %
   curtain?: CurtainState; // Cột curtain trong database
-  airQuality: AirQualityState; // 'tot' | 'trung_binh' | 'kem' (từ cột air_quality)
+  airQuality: AirQualityState; // 'tot' | 'trung_binh' | 'kem' | string (từ cột air_quality)
+  coPpm?: number; // Cột co_ppm trong bảng rooms / sensor_data
+  co2Ppm?: number; // Cột co2_ppm trong bảng rooms / sensor_data
   flame: boolean; // Cảm biến lửa (từ cột flame)
   relayAlarm: boolean; // Relay còi báo động (từ cột relay_alarm)
   devices: RoomDevices;
@@ -110,6 +112,8 @@ export interface DbRoom {
   fan_on: boolean;
   curtain?: 'open' | 'close' | 'stop';
   air_quality?: 'tot' | 'trung_binh' | 'kem' | string;
+  co_ppm?: number | null;
+  co2_ppm?: number | null;
   flame?: boolean;
   relay_alarm?: boolean;
   updated_at: string;
@@ -122,6 +126,8 @@ export interface DbSensorData {
   room_code: string;
   gas: number;
   clkk: 'kem' | 'tot' | 'trung_binh' | string;
+  co_ppm?: number | null;
+  co2_ppm?: number | null;
   nhiet_do: number;
   do_am: number;
   lua: 'Co' | 'Ko co' | string;
@@ -149,6 +155,8 @@ export interface DbSchedule {
   run_time: string; // "17:30"
   days: number[]; // 0=CN..6=T7
   enabled: boolean;
+  relays?: string[] | null;
+  last_run_on?: string | null;
 }
 
 export interface DbSettings {
@@ -206,6 +214,8 @@ export interface ScheduleRule {
   time: string; // "17:30"
   daysOfWeek: number[]; // 0=CN..6=T7
   isEnabled: boolean;
+  relays?: string[];
+  lastRunOn?: string | null;
   description: string;
 }
 

@@ -145,6 +145,10 @@ export default function App() {
   // Track executed rules by minute to prevent repeated triggers
   const executedMinutesRef = useRef<Record<string, boolean>>({});
 
+  // Track last local write timestamp so background polling never clobbers optimistic toggles
+  const lastLocalWriteAtRef = useRef<number>(0);
+  const [isRefreshingSensors, setIsRefreshingSensors] = useState(false);
+
   // 1. TẢI DỮ LIỆU BAN ĐẦU TỪ SUPABASE THẬT
   const loadAllSupabaseData = async () => {
     setIsLoading(true);
@@ -255,9 +259,18 @@ export default function App() {
           return [newAlert, ...prev];
         });
       },
-      (sensorData) => {
-        // Lưu vào danh sách telemetry logs gần nhất (bảng sensor_data)
-        setRecentSensorLogs((prev) => [sensorData, ...prev.filter((s) => s.id !== sensorData.id)].slice(0, 25));
+      (sensorData, eventType) => {
+        if (eventType === 'DELETE') {
+          setRecentSensorLogs((prev) => prev.filter((s) => s.id !== sensorData.id));
+          return;
+        }
+
+        // Lưu vào danh sách telemetry logs gần nhất (bảng sensor_data), giữ đúng thứ tự id mới nhất lên đầu
+        setRecentSensorLogs((prev) =>
+          [sensorData, ...prev.filter((s) => s.id !== sensorData.id)]
+            .sort((a, b) => Number(b.id) - Number(a.id))
+            .slice(0, 25)
+        );
 
         // Cập nhật tức thì dữ liệu cảm biến thực tế từ bảng sensor_data
         setRooms((prev) => {
@@ -354,49 +367,82 @@ export default function App() {
     return () => clearInterval(connectionChecker);
   }, []);
 
-  // 4. ĐỒNG BỘ ĐỊNH KỲ DỮ LIỆU CẢM BIẾN (sensor_data) VÀ BẢNG LỆNH RƠ-LE (relay_control)
-  useEffect(() => {
-    const sensorPoller = setInterval(async () => {
-      try {
-        const [sensors, relayControls] = await Promise.all([
-          supabaseService.fetchRecentSensorData(15),
-          supabaseService.fetchRelayControls(),
-        ]);
+  // 4. ĐỒNG BỘ ĐỊNH KỲ (~3 GIÂY) DỮ LIỆU CẢM BIẾN (sensor_data), ROOMS & RELAY_CONTROL TỪ SUPABASE
+  const syncRealtimeTablesNow = async () => {
+    try {
+      const [sensors, relayControls, fetchedRooms] = await Promise.all([
+        supabaseService.fetchRecentSensorData(25),
+        supabaseService.fetchRelayControls(),
+        supabaseService.fetchRooms(),
+      ]);
 
-        if (sensors && sensors.length > 0) {
-          setRecentSensorLogs((prev) => {
-            const map = new Map<number, DbSensorData>();
-            sensors.forEach((s) => map.set(s.id, s));
-            prev.forEach((s) => {
-              if (!map.has(s.id)) map.set(s.id, s);
-            });
-            return Array.from(map.values()).slice(0, 25);
-          });
-        }
-
-        // Cập nhật thông số cảm biến & phản hồi relay_control mới nhất cho các phòng
-        setRooms((prev) =>
-          prev.map((r) => {
-            let nextRoom = r;
-            if (sensors && sensors.length > 0) {
-              const matchedSensor = sensors.find((s) => s.room_code === r.code || (!s.room_code && r.code === 'A201'));
-              if (matchedSensor) {
-                nextRoom = supabaseService.mergeSensorDataToRoom(nextRoom, matchedSensor);
-              }
-            }
-            if (relayControls && relayControls.length > 0) {
-              const matchedRc = relayControls.find((rc) => rc.room_code === r.code || (!rc.room_code && r.code === 'A201'));
-              if (matchedRc) {
-                nextRoom = supabaseService.mergeRelayControlToRoom(nextRoom, matchedRc);
-              }
-            }
-            return nextRoom;
-          })
-        );
-      } catch (e) {
-        // Bỏ qua lỗi ngắt quãng mạng nền
+      if (sensors) {
+        const sortedSensors = [...sensors].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 25);
+        setRecentSensorLogs(sortedSensors);
       }
-    }, 6000);
+
+      // Nếu người dùng vừa thao tác ghi cục bộ trong 1.5s gần nhất thì bỏ qua ghi đè rooms để tránh nháy nút
+      if (Date.now() - lastLocalWriteAtRef.current < 1500) {
+        return;
+      }
+
+      if (fetchedRooms && fetchedRooms.length > 0) {
+        setRooms(fetchedRooms);
+        return;
+      }
+
+      // Fallback nếu fetchRooms rỗng: merge sensors + relayControls vào state hiện tại
+      setRooms((prev) =>
+        prev.map((r) => {
+          let nextRoom = r;
+          if (sensors && sensors.length > 0) {
+            const matchedSensor = sensors.find((s) => s.room_code === r.code || (!s.room_code && r.code === 'A201'));
+            if (matchedSensor) {
+              nextRoom = supabaseService.mergeSensorDataToRoom(nextRoom, matchedSensor);
+            }
+          }
+          if (relayControls && relayControls.length > 0) {
+            const matchedRc = relayControls.find((rc) => rc.room_code === r.code || (!rc.room_code && r.code === 'A201'));
+            if (matchedRc) {
+              nextRoom = supabaseService.mergeRelayControlToRoom(nextRoom, matchedRc);
+            }
+          }
+          return nextRoom;
+        })
+      );
+    } catch {
+      // Bỏ qua lỗi ngắt quãng mạng nền
+    }
+  };
+
+  const handleRefreshSensorData = async () => {
+    setIsRefreshingSensors(true);
+    try {
+      await syncRealtimeTablesNow();
+    } finally {
+      setIsRefreshingSensors(false);
+    }
+  };
+
+  useEffect(() => {
+    let tickCount = 0;
+    const sensorPoller = setInterval(async () => {
+      tickCount += 1;
+      await syncRealtimeTablesNow();
+      // Mỗi ~12 giây đồng bộ thêm schedules & settings phòng trường hợp Realtime bị tắt trên DB
+      if (tickCount % 4 === 0) {
+        try {
+          const [latestSchedules, latestSettings] = await Promise.all([
+            supabaseService.fetchSchedules(),
+            supabaseService.fetchSettings(),
+          ]);
+          if (latestSchedules) setRules(latestSchedules);
+          if (latestSettings) setSettings(latestSettings);
+        } catch {
+          // Bỏ qua lỗi mạng nền
+        }
+      }
+    }, 3000);
 
     return () => clearInterval(sensorPoller);
   }, []);
@@ -464,6 +510,7 @@ export default function App() {
 
   // CẬP NHẬT CHI TIẾT PHÒNG HỌC (GỌI UPDATE BẢNG ROOMS VÀ ĐỒNG BỘ BẢNG RELAY_CONTROL)
   const handleUpdateRoom = async (updated: Room) => {
+    lastLocalWriteAtRef.current = Date.now();
     const prevRoom = roomsRef.current.find((r) => r.code === updated.code || r.id === updated.id);
     const roomCode = updated.code || updated.id;
 
@@ -542,6 +589,7 @@ export default function App() {
     relayType: 'relay1_den' | 'relay2_quat' | 'relay3_maychieu' | 'relay4_dieuhoa' | 'relay_alarm' | 'power_on' | 'auto_mode' | 'khan_cap',
     customState?: boolean
   ) => {
+    lastLocalWriteAtRef.current = Date.now();
     const targetRoom = roomsRef.current.find((r) => r.code === roomCode || r.id === roomCode);
     if (!targetRoom) return;
 
@@ -686,6 +734,7 @@ export default function App() {
   // BẬT / TẮT NGUỒN ĐIỆN PHÒNG (CẬP NHẬT CỘT power_on VỚI .eq('code', ...))
   const handleToggleRoomPower = async (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    lastLocalWriteAtRef.current = Date.now();
     const target = roomsRef.current.find((r) => r.id === roomId || r.code === roomId);
     if (!target) return;
 
@@ -1340,6 +1389,11 @@ export default function App() {
         ? [new Date(`${savedRule.eventDate}T00:00:00`).getDay()]
         : savedRule.daysOfWeek;
 
+    const relaysPayload =
+      savedRule.relays && savedRule.relays.length > 0
+        ? savedRule.relays
+        : ['relay1_den', 'relay2_quat', 'relay3_maychieu', 'relay4_dieuhoa'];
+
     if (exists) {
       setRules((prev) => prev.map((r) => (r.id === savedRule.id ? savedRule : r)));
       const ok = await supabaseService.updateSchedule(savedRule.id, {
@@ -1350,6 +1404,7 @@ export default function App() {
         run_time: savedRule.time,
         days: daysPayload,
         enabled: savedRule.isEnabled,
+        relays: relaysPayload,
       });
       if (!ok) {
         const fresh = await supabaseService.fetchSchedules();
@@ -1365,6 +1420,7 @@ export default function App() {
         run_time: savedRule.time,
         days: daysPayload,
         enabled: savedRule.isEnabled,
+        relays: relaysPayload,
       });
       if (inserted) {
         setRules((prev) => [inserted, ...prev]);
@@ -1454,6 +1510,12 @@ export default function App() {
 
     const refreshed = await supabaseService.fetchRooms();
     setRooms(refreshed);
+
+    if (isAuto) {
+      const nowD = new Date();
+      const runDateStr = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${String(nowD.getDate()).padStart(2, '0')}`;
+      await supabaseService.updateSchedule(rule.id, { last_run_on: runDateStr });
+    }
 
     logActivity(
       isAuto
@@ -1824,6 +1886,8 @@ export default function App() {
                     onOpenTimeSyncModal={() => setIsTimeModalOpen(true)}
                     rules={rules}
                     onNavigateToSchedules={() => setCurrentTab('schedules')}
+                    onRefreshSensorData={handleRefreshSensorData}
+                    isRefreshingSensors={isRefreshingSensors}
                   />
                 )}
 

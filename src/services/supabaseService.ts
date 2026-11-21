@@ -239,6 +239,8 @@ class SupabaseService {
       humidity: Number(row.humidity) || 0,
       curtain: (row.curtain as any) || 'stop',
       airQuality: row.air_quality || 'tot',
+      coPpm: row.co_ppm !== null && row.co_ppm !== undefined ? Number(row.co_ppm) : undefined,
+      co2Ppm: row.co2_ppm !== null && row.co2_ppm !== undefined ? Number(row.co2_ppm) : undefined,
       flame: isFlame,
       relayAlarm: Boolean(row.relay_alarm),
       emergencyPowerCut: false,
@@ -362,6 +364,8 @@ class SupabaseService {
         time: cleanTime,
         daysOfWeek: Array.isArray(row.days) ? row.days : [new Date(`${eventDate}T00:00:00`).getDay()],
         isEnabled: Boolean(row.enabled),
+        relays: Array.isArray(row.relays) ? row.relays : ['relay1_den', 'relay2_quat', 'relay3_maychieu', 'relay4_dieuhoa'],
+        lastRunOn: row.last_run_on ?? null,
         description: `Sự kiện ngày ${vnDate} (${cleanTime}${endTime ? ` - ${endTime}` : ''}) • ${actionLabel} tại ${targetName}`,
       };
     }
@@ -378,6 +382,8 @@ class SupabaseService {
       time: cleanTime,
       daysOfWeek: Array.isArray(row.days) ? row.days : [1, 2, 3, 4, 5, 6],
       isEnabled: Boolean(row.enabled),
+      relays: Array.isArray(row.relays) ? row.relays : ['relay1_den', 'relay2_quat', 'relay3_maychieu', 'relay4_dieuhoa'],
+      lastRunOn: row.last_run_on ?? null,
       description: `${actionLabel} tại ${targetName} lúc ${cleanTime}`,
     };
   }
@@ -630,21 +636,23 @@ class SupabaseService {
   /**
    * Đọc danh sách bản ghi mới nhất từ bảng sensor_data (dữ liệu thật từ mạch cảm biến)
    */
-  public async fetchRecentSensorData(limit: number = 20): Promise<DbSensorData[]> {
+  public async fetchRecentSensorData(limit: number = 25): Promise<DbSensorData[]> {
     try {
-      const { data, error } = await supabase
-        .from('sensor_data')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const { data, error } = await this.runWithRetry(async () =>
+        supabase
+          .from('sensor_data')
+          .select('*')
+          .order('id', { ascending: false })
+          .limit(limit)
+      );
 
       if (error) {
-        console.error('[Supabase fetchRecentSensorData] Lỗi đọc sensor_data:', error.message);
+        console.warn('[Supabase fetchRecentSensorData] Lỗi đọc sensor_data:', error.message);
         return [];
       }
       return (data as DbSensorData[]) || [];
     } catch (err) {
-      console.error('[Supabase fetchRecentSensorData] Ngoại lệ:', err);
+      console.warn('[Supabase fetchRecentSensorData] Ngoại lệ:', err);
       return [];
     }
   }
@@ -658,12 +666,20 @@ class SupabaseService {
     const gasVal = Number(sensor.gas) || 0;
     const isAlert = isFlame || gasVal > 25;
 
+    const airString =
+      sensor.clkk ||
+      (sensor.co_ppm !== null && sensor.co_ppm !== undefined && sensor.co2_ppm !== null && sensor.co2_ppm !== undefined
+        ? `CO:${sensor.co_ppm}ppm CO2:${sensor.co2_ppm}ppm`
+        : room.airQuality);
+
     return {
       ...room,
       temperature: Number(sensor.nhiet_do) || room.temperature,
       humidity: Number(sensor.do_am) || room.humidity,
       smokeLevel: gasVal,
-      airQuality: sensor.clkk || room.airQuality,
+      airQuality: airString,
+      coPpm: sensor.co_ppm !== null && sensor.co_ppm !== undefined ? Number(sensor.co_ppm) : room.coPpm,
+      co2Ppm: sensor.co2_ppm !== null && sensor.co2_ppm !== undefined ? Number(sensor.co2_ppm) : room.co2Ppm,
       flame: isFlame,
       status: isAlert ? 'alert' : room.isPowerOn ? 'on' : 'off',
       hasFireAlarm: isAlert,
@@ -1752,7 +1768,7 @@ class SupabaseService {
   public subscribeRealtime(
     onRoomChange: (updatedRoom: Room) => void,
     onAlertChange: (newAlert: AlertLog) => void,
-    onSensorDataChange?: (sensor: DbSensorData) => void,
+    onSensorDataChange?: (sensor: DbSensorData, eventType?: 'INSERT' | 'UPDATE' | 'DELETE') => void,
     onRelayControlChange?: (rc: DbRelayControl) => void,
     onSchedulesChange?: () => void,
     onSettingsChange?: () => void
@@ -1781,11 +1797,13 @@ class SupabaseService {
         )
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'sensor_data' },
+          { event: '*', schema: 'public', table: 'sensor_data' },
           (payload) => {
-            if (payload.new) {
+            if (payload.eventType === 'DELETE' && payload.old) {
+              onSensorDataChange?.(payload.old as DbSensorData, 'DELETE');
+            } else if (payload.new) {
               const sensor = payload.new as DbSensorData;
-              onSensorDataChange?.(sensor);
+              onSensorDataChange?.(sensor, payload.eventType as 'INSERT' | 'UPDATE');
             }
           }
         )

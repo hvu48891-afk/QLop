@@ -30,7 +30,8 @@ import {
   Cpu,
   Lock,
   Calendar,
-  CalendarClock
+  CalendarClock,
+  RefreshCw
 } from 'lucide-react';
 import { Room, AlertLog, ActivityLog, DbSensorData, User, ScheduleRule } from '../types';
 import { parseAirQuality } from '../utils/airQuality';
@@ -55,6 +56,8 @@ interface DashboardTabProps {
   onOpenTimeSyncModal?: () => void;
   rules?: ScheduleRule[];
   onNavigateToSchedules?: () => void;
+  onRefreshSensorData?: () => Promise<void> | void;
+  isRefreshingSensors?: boolean;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -77,6 +80,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onOpenTimeSyncModal,
   rules = [],
   onNavigateToSchedules,
+  onRefreshSensorData,
+  isRefreshingSensors = false,
 }) => {
   const isAdmin = currentUser?.role === 'admin';
   // Tabs for alerts: default is 'unresolved' (only show active/new alerts, NEVER resolved ones)
@@ -434,38 +439,78 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
       {/* ================= 2. BẢNG DỮ LIỆU CẢM BIẾN REALTIME (BẢNG sensor_data SUPABASE) ================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-              <Cpu className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-base">Dữ liệu Cảm biến Realtime</h3>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-mono text-cyan-300">
-                  <Database className="w-3 h-3 text-cyan-400" />
-                  <span>bảng sensor_data</span>
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">
-                Luồng dữ liệu vật lý gửi liên tục từ mạch ESP32 vào cơ sở dữ liệu Supabase (~3s/gói tin)
-              </p>
-            </div>
-          </div>
+        {(() => {
+          const latestPacket = recentSensorLogs[0];
+          const latestCreatedMs = latestPacket?.created_at ? new Date(latestPacket.created_at).getTime() : 0;
+          const isStreamLive = latestCreatedMs > 0 && Math.abs(activeNow.getTime() - latestCreatedMs) <= 30000;
+          const latestTimeText = latestCreatedMs > 0
+            ? new Date(latestCreatedMs).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            : null;
+          const latestDateText = latestCreatedMs > 0
+            ? new Date(latestCreatedMs).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : null;
 
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
-              <span>Đang nhận trực tiếp</span>
-            </span>
-          </div>
-        </div>
+          return (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-bold text-white text-base">Dữ liệu Cảm biến Realtime</h3>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-mono text-cyan-300">
+                      <Database className="w-3 h-3 text-cyan-400" />
+                      <span>bảng sensor_data</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Luồng dữ liệu vật lý từ ESP32 đồng bộ với Supabase (~3s/gói tin)
+                    {latestTimeText && (
+                      <span className="text-slate-300 font-mono"> • Gói cuối: #{latestPacket?.id} ({latestTimeText} {latestDateText})</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border text-xs font-medium whitespace-nowrap ${
+                    isStreamLive
+                      ? 'border-emerald-500/30 text-emerald-400'
+                      : 'border-amber-500/30 text-amber-300'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full inline-block ${
+                      isStreamLive ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+                    }`}
+                  ></span>
+                  <span>{isStreamLive ? 'Đang nhận trực tiếp' : latestPacket ? 'Đã đồng bộ DB mới nhất' : 'Đang kết nối DB...'}</span>
+                </span>
+
+                {onRefreshSensorData && (
+                  <button
+                    type="button"
+                    onClick={() => onRefreshSensorData()}
+                    disabled={isRefreshingSensors}
+                    title="Đọc lại ngay các bản ghi mới nhất từ bảng sensor_data trên Supabase"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-all active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshingSensors ? 'animate-spin' : ''}`} />
+                    <span>Làm mới</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Sensor Data Stream Table */}
         <div className="overflow-x-auto rounded-2xl border border-slate-800/80">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-950/90 text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-800">
+              <tr className="bg-slate-950/90 text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-800 whitespace-nowrap">
                 <th className="py-2.5 px-3">Gói #ID</th>
                 <th className="py-2.5 px-3">Thời gian ghi</th>
                 <th className="py-2.5 px-3">Phòng</th>
@@ -485,10 +530,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   const isFlame = luaStr === 'co' || luaStr === 'có' || luaStr === 'true' || luaStr === '1';
                   const gasVal = Number(log.gas) || 0;
                   const air = parseAirQuality(log.clkk);
+                  const coDisplay =
+                    log.co_ppm !== null && log.co_ppm !== undefined
+                      ? `${Math.round(Number(log.co_ppm))} ppm`
+                      : air.coText;
+                  const co2Display =
+                    log.co2_ppm !== null && log.co2_ppm !== undefined
+                      ? `${Math.round(Number(log.co2_ppm))} ppm`
+                      : air.co2Text;
+
                   const createdAtDate = log.created_at ? new Date(log.created_at) : null;
-                  const timeFormatted = createdAtDate
-                    ? `${createdAtDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • ${createdAtDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                  const timePart = createdAtDate
+                    ? createdAtDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                     : 'Vừa xong';
+                  const datePart = createdAtDate
+                    ? createdAtDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                    : '';
 
                   return (
                     <tr
@@ -497,34 +554,35 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         idx === 0 ? 'bg-cyan-500/5' : ''
                       }`}
                     >
-                      <td className="py-2.5 px-3 text-cyan-400 font-bold">
+                      <td className="py-2.5 px-3 text-cyan-400 font-bold whitespace-nowrap">
                         #{log.id}
                         {idx === 0 && (
-                          <span className="ml-1 text-[9px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-sans uppercase">
+                          <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-sans uppercase">
                             Mới
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-slate-300">
-                        {timeFormatted}
+                      <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">
+                        <span className="font-semibold text-slate-200">{timePart}</span>
+                        {datePart && <span className="text-slate-400 text-[11px] ml-1.5">{datePart}</span>}
                       </td>
-                      <td className="py-2.5 px-3 font-sans font-bold text-white">
+                      <td className="py-2.5 px-3 font-sans font-bold text-white whitespace-nowrap">
                         {log.room_code || 'A201'}
                       </td>
-                      <td className="py-2.5 px-3 text-amber-300 font-bold">
+                      <td className="py-2.5 px-3 text-amber-300 font-bold whitespace-nowrap">
                         {Number(log.nhiet_do).toFixed(1)}°C
                       </td>
-                      <td className="py-2.5 px-3 text-blue-300 font-bold">
+                      <td className="py-2.5 px-3 text-blue-300 font-bold whitespace-nowrap">
                         {log.do_am}%
                       </td>
-                      <td className="py-2.5 px-3">
+                      <td className="py-2.5 px-3 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded font-bold text-[11px] ${
                           gasVal > 15 ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'text-slate-300'
                         }`}>
                           {gasVal} ppm
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 font-sans">
+                      <td className="py-2.5 px-3 font-sans whitespace-nowrap">
                         {isFlame ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] animate-bounce shadow">
                             <Flame className="w-3 h-3 fill-yellow-300" />
@@ -537,34 +595,34 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 font-sans">
+                      <td className="py-2.5 px-3 font-sans whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded font-bold text-[11px] font-mono text-slate-200">
-                          {air.coText}
+                          {coDisplay}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 font-sans">
+                      <td className="py-2.5 px-3 font-sans whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded font-bold text-[11px] font-mono text-cyan-300">
-                          {air.co2Text}
+                          {co2Display}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 font-sans">
-                        <div className="flex items-center gap-1.5 text-[10px]">
-                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                      <td className="py-2.5 px-3 font-sans whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-[10px] flex-nowrap">
+                          <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
                             log.relay1_den ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
                             Đèn: {log.relay1_den ? 'Bật' : 'Tắt'}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                          <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
                             log.relay2_quat ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
                             Quạt: {log.relay2_quat ? 'Bật' : 'Tắt'}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                          <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
                             log.relay3_maychieu ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
                             Chiếu: {log.relay3_maychieu ? 'Bật' : 'Tắt'}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded font-semibold ${
+                          <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
                             log.relay4_dieuhoa ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
                             Lạnh: {log.relay4_dieuhoa ? 'Bật' : 'Tắt'}
