@@ -159,7 +159,7 @@ export const SchoolPowerModal: React.FC<SchoolPowerModalProps> = ({
               </span>
             </div>
             <p className="text-xs text-red-100/90 leading-relaxed">
-              Ngắt tức thời toàn bộ nguồn điện của tất cả {totalRooms} phòng học, tự động ngắt và khóa cả 4 Relay (Đèn, Quạt, Máy chiếu, Điều hòa) trong Database Supabase khi có sự cố chập điện hoặc cần ngắt khẩn cấp.
+              Ngắt tức thời toàn bộ nguồn điện của tất cả {totalRooms} phòng học, tự động ngắt và khóa cả 4 Relay (Máy chiếu, Đèn, Điều hòa, Quạt) trong Database Supabase khi có sự cố chập điện hoặc cần ngắt khẩn cấp.
             </p>
           </div>
 

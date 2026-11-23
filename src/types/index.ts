@@ -75,19 +75,29 @@ export interface Room {
 }
 
 // Supabase Database Row Types (Khớp 100% chính xác cấu trúc bảng relay_control)
+export type RelayType =
+  | 'relay1_maychieu'
+  | 'relay2_den'
+  | 'relay3_dieuhoa'
+  | 'relay4_quat'
+  | 'relay_alarm'
+  | 'power_on'
+  | 'auto_mode'
+  | 'khan_cap';
+
 export interface DbRelayControl {
   id: number;
   room_code: string;
   auto_mode: boolean;
-  relay1_den: boolean;
-  relay2_quat: boolean;
-  relay3_maychieu: boolean;
-  relay4_dieuhoa: boolean;
+  relay1_maychieu: boolean;
+  relay2_den: boolean;
+  relay3_dieuhoa: boolean;
+  relay4_quat: boolean;
   updated_at: string;
-  state_relay1_den: boolean;
-  state_relay2_quat: boolean;
-  state_relay3_maychieu: boolean;
-  state_relay4_dieuhoa: boolean;
+  state_relay1_maychieu: boolean;
+  state_relay2_den: boolean;
+  state_relay3_dieuhoa: boolean;
+  state_relay4_quat: boolean;
   khan_cap: boolean;
   state_updated_at?: string;
 }
@@ -131,10 +141,10 @@ export interface DbSensorData {
   nhiet_do: number;
   do_am: number;
   lua: 'Co' | 'Ko co' | string;
-  relay1_den: boolean;
-  relay2_quat: boolean;
-  relay3_maychieu: boolean;
-  relay4_dieuhoa: boolean;
+  relay1_maychieu: boolean;
+  relay2_den: boolean;
+  relay3_dieuhoa: boolean;
+  relay4_quat: boolean;
 }
 
 export interface DbAlert {

@@ -31,7 +31,7 @@ import {
   Radio,
   Lock
 } from 'lucide-react';
-import { Room, User } from '../types';
+import { Room, User, RelayType } from '../types';
 import { parseAirQuality } from '../utils/airQuality';
 
 interface RoomsTabProps {
@@ -41,7 +41,7 @@ interface RoomsTabProps {
   onToggleRoomPower: (roomId: string, e: React.MouseEvent) => void;
   onToggleRelay?: (
     roomCode: string,
-    relayType: 'relay1_den' | 'relay2_quat' | 'relay3_maychieu' | 'relay4_dieuhoa' | 'relay_alarm' | 'power_on' | 'auto_mode' | 'khan_cap',
+    relayType: RelayType,
     customState?: boolean
   ) => void;
   onTriggerSmoke: (roomId: string, e: React.MouseEvent, isTrigger?: boolean) => void;
@@ -487,61 +487,17 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {/* R1: Đèn */}
+                  {/* R1: Máy chiếu */}
                   <button
                     type="button"
                     disabled={isMasterPowerCut}
-                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay1_den')}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay1_maychieu')}
                     title={
                       isMasterPowerCut
                         ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 1'
-                        : room.devices.light.isOn
-                        ? 'Relay 1 (Đèn): Đang BẬT. Bấm để tắt.'
-                        : 'Relay 1 (Đèn): Đang TẮT. Bấm để bật.'
-                    }
-                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
-                      room.devices.light.isOn
-                        ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/30'
-                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
-                    }`}
-                  >
-                    <Lightbulb className="w-3 h-3 stroke-[2.2]" />
-                    <span>R1</span>
-                  </button>
-
-                  {/* R2: Quạt */}
-                  <button
-                    type="button"
-                    disabled={isMasterPowerCut}
-                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay2_quat')}
-                    title={
-                      isMasterPowerCut
-                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 2'
-                        : room.devices.fan.isOn
-                        ? 'Relay 2 (Quạt): Đang BẬT. Bấm để tắt.'
-                        : 'Relay 2 (Quạt): Đang TẮT. Bấm để bật.'
-                    }
-                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
-                      room.devices.fan.isOn
-                        ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30'
-                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
-                    }`}
-                  >
-                    <Fan className={`w-3 h-3 stroke-[2.2] ${room.devices.fan.isOn ? 'animate-spin' : ''}`} />
-                    <span>R2</span>
-                  </button>
-
-                  {/* R3: Máy chiếu */}
-                  <button
-                    type="button"
-                    disabled={isMasterPowerCut}
-                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay3_maychieu')}
-                    title={
-                      isMasterPowerCut
-                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 3'
                         : room.devices.projector.isOn
-                        ? 'Relay 3 (Máy chiếu): Đang BẬT. Bấm để tắt.'
-                        : 'Relay 3 (Máy chiếu): Đang TẮT. Bấm để bật.'
+                        ? 'Relay 1 (Máy chiếu): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 1 (Máy chiếu): Đang TẮT. Bấm để bật.'
                     }
                     className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                       room.devices.projector.isOn
@@ -550,20 +506,42 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                     }`}
                   >
                     <Tv className="w-3 h-3 stroke-[2.2]" />
-                    <span>R3</span>
+                    <span>R1</span>
                   </button>
 
-                  {/* R4: Điều hòa */}
+                  {/* R2: Đèn */}
                   <button
                     type="button"
                     disabled={isMasterPowerCut}
-                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay4_dieuhoa')}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay2_den')}
                     title={
                       isMasterPowerCut
-                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 4'
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 2'
+                        : room.devices.light.isOn
+                        ? 'Relay 2 (Đèn): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 2 (Đèn): Đang TẮT. Bấm để bật.'
+                    }
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
+                      room.devices.light.isOn
+                        ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
+                    }`}
+                  >
+                    <Lightbulb className="w-3 h-3 stroke-[2.2]" />
+                    <span>R2</span>
+                  </button>
+
+                  {/* R3: Điều hòa */}
+                  <button
+                    type="button"
+                    disabled={isMasterPowerCut}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay3_dieuhoa')}
+                    title={
+                      isMasterPowerCut
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 3'
                         : room.devices.ac.isOn
-                        ? 'Relay 4 (Điều hòa): Đang BẬT. Bấm để tắt.'
-                        : 'Relay 4 (Điều hòa): Đang TẮT. Bấm để bật.'
+                        ? 'Relay 3 (Điều hòa): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 3 (Điều hòa): Đang TẮT. Bấm để bật.'
                     }
                     className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
                       room.devices.ac.isOn
@@ -572,6 +550,28 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
                     }`}
                   >
                     <Wind className="w-3 h-3 stroke-[2.2]" />
+                    <span>R3</span>
+                  </button>
+
+                  {/* R4: Quạt */}
+                  <button
+                    type="button"
+                    disabled={isMasterPowerCut}
+                    onClick={() => !isMasterPowerCut && onToggleRelay && onToggleRelay(room.code || room.id, 'relay4_quat')}
+                    title={
+                      isMasterPowerCut
+                        ? 'Cầu dao tổng đang ngắt điện — không thể kích hoạt Relay 4'
+                        : room.devices.fan.isOn
+                        ? 'Relay 4 (Quạt): Đang BẬT. Bấm để tắt.'
+                        : 'Relay 4 (Quạt): Đang TẮT. Bấm để bật.'
+                    }
+                    className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed ${
+                      room.devices.fan.isOn
+                        ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30'
+                        : 'bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700/60'
+                    }`}
+                  >
+                    <Fan className={`w-3 h-3 stroke-[2.2] ${room.devices.fan.isOn ? 'animate-spin' : ''}`} />
                     <span>R4</span>
                   </button>
 

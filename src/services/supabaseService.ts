@@ -18,7 +18,8 @@ import {
   User, 
   ThresholdSettings,
   LightPreset,
-  AcMode
+  AcMode,
+  RelayType
 } from '../types';
 
 export interface SupabaseStatus {
@@ -364,7 +365,7 @@ class SupabaseService {
         time: cleanTime,
         daysOfWeek: Array.isArray(row.days) ? row.days : [new Date(`${eventDate}T00:00:00`).getDay()],
         isEnabled: Boolean(row.enabled),
-        relays: Array.isArray(row.relays) ? row.relays : ['relay1_den', 'relay2_quat', 'relay3_maychieu', 'relay4_dieuhoa'],
+        relays: Array.isArray(row.relays) ? row.relays : ['relay1_maychieu', 'relay2_den', 'relay3_dieuhoa', 'relay4_quat'],
         lastRunOn: row.last_run_on ?? null,
         description: `Sự kiện ngày ${vnDate} (${cleanTime}${endTime ? ` - ${endTime}` : ''}) • ${actionLabel} tại ${targetName}`,
       };
@@ -382,7 +383,7 @@ class SupabaseService {
       time: cleanTime,
       daysOfWeek: Array.isArray(row.days) ? row.days : [1, 2, 3, 4, 5, 6],
       isEnabled: Boolean(row.enabled),
-      relays: Array.isArray(row.relays) ? row.relays : ['relay1_den', 'relay2_quat', 'relay3_maychieu', 'relay4_dieuhoa'],
+      relays: Array.isArray(row.relays) ? row.relays : ['relay1_maychieu', 'relay2_den', 'relay3_dieuhoa', 'relay4_quat'],
       lastRunOn: row.last_run_on ?? null,
       description: `${actionLabel} tại ${targetName} lúc ${cleanTime}`,
     };
@@ -517,10 +518,10 @@ class SupabaseService {
     const effectiveRc: DbRelayControl = isMasterCut
       ? {
           ...rc,
-          relay1_den: false,
-          relay2_quat: false,
-          relay3_maychieu: false,
-          relay4_dieuhoa: false,
+          relay1_maychieu: false,
+          relay2_den: false,
+          relay3_dieuhoa: false,
+          relay4_quat: false,
           auto_mode: false,
         }
       : rc;
@@ -531,24 +532,24 @@ class SupabaseService {
       relayAlarm: false,
       devices: {
         ...room.devices,
-        light: {
-          ...room.devices.light,
-          isOn: Boolean(effectiveRc.relay1_den),
-          brightness: effectiveRc.relay1_den ? (room.devices.light.brightness || 85) : 0,
-          preset: effectiveRc.relay1_den ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
-        },
-        fan: {
-          ...room.devices.fan,
-          isOn: Boolean(effectiveRc.relay2_quat),
-          speed: effectiveRc.relay2_quat ? (room.devices.fan.speed || 2) : 0,
-        },
         projector: {
           ...room.devices.projector,
-          isOn: Boolean(effectiveRc.relay3_maychieu),
+          isOn: Boolean(effectiveRc.relay1_maychieu),
+        },
+        light: {
+          ...room.devices.light,
+          isOn: Boolean(effectiveRc.relay2_den),
+          brightness: effectiveRc.relay2_den ? (room.devices.light.brightness || 85) : 0,
+          preset: effectiveRc.relay2_den ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
         },
         ac: {
           ...room.devices.ac,
-          isOn: Boolean(effectiveRc.relay4_dieuhoa),
+          isOn: Boolean(effectiveRc.relay3_dieuhoa),
+        },
+        fan: {
+          ...room.devices.fan,
+          isOn: Boolean(effectiveRc.relay4_quat),
+          speed: effectiveRc.relay4_quat ? (room.devices.fan.speed || 2) : 0,
         },
       },
     };
@@ -604,10 +605,10 @@ class SupabaseService {
       const insertPayload = {
         room_code: code,
         auto_mode: fields.auto_mode ?? false,
-        relay1_den: fields.relay1_den ?? false,
-        relay2_quat: fields.relay2_quat ?? false,
-        relay3_maychieu: fields.relay3_maychieu ?? false,
-        relay4_dieuhoa: fields.relay4_dieuhoa ?? false,
+        relay1_maychieu: fields.relay1_maychieu ?? false,
+        relay2_den: fields.relay2_den ?? false,
+        relay3_dieuhoa: fields.relay3_dieuhoa ?? false,
+        relay4_quat: fields.relay4_quat ?? false,
         khan_cap: fields.khan_cap ?? false,
         updated_at: new Date().toISOString(),
       };
@@ -695,14 +696,14 @@ class SupabaseService {
    */
   public async toggleRelay(
     code: string,
-    relayType: 'relay1_den' | 'relay2_quat' | 'relay3_maychieu' | 'relay4_dieuhoa' | 'relay_alarm' | 'power_on' | 'auto_mode' | 'khan_cap',
+    relayType: RelayType,
     state: boolean
   ): Promise<{ roomUpdated: boolean; relayControlRow: DbRelayControl | null }> {
     const roomPayloadMap: Record<string, Partial<DbRoom> | null> = {
-      relay1_den: { light_on: state, light_mode: state ? 'study' : 'off' },
-      relay2_quat: { fan_on: state },
-      relay3_maychieu: { projector_on: state },
-      relay4_dieuhoa: { ac_on: state },
+      relay1_maychieu: { projector_on: state },
+      relay2_den: { light_on: state, light_mode: state ? 'study' : 'off' },
+      relay3_dieuhoa: { ac_on: state },
+      relay4_quat: { fan_on: state },
       relay_alarm: { relay_alarm: state },
       khan_cap: { relay_alarm: state },
       auto_mode: null,
@@ -714,20 +715,20 @@ class SupabaseService {
     };
 
     const rcPayloadMap: Record<string, Partial<DbRelayControl> | null> = {
-      relay1_den: { relay1_den: state, auto_mode: false },
-      relay2_quat: { relay2_quat: state, auto_mode: false },
-      relay3_maychieu: { relay3_maychieu: state, auto_mode: false },
-      relay4_dieuhoa: { relay4_dieuhoa: state, auto_mode: false },
+      relay1_maychieu: { relay1_maychieu: state, auto_mode: false },
+      relay2_den: { relay2_den: state, auto_mode: false },
+      relay3_dieuhoa: { relay3_dieuhoa: state, auto_mode: false },
+      relay4_quat: { relay4_quat: state, auto_mode: false },
       relay_alarm: { khan_cap: state },
       khan_cap: { khan_cap: state },
       auto_mode: { auto_mode: state },
       power_on: state
         ? null
         : {
-            relay1_den: false,
-            relay2_quat: false,
-            relay3_maychieu: false,
-            relay4_dieuhoa: false,
+            relay1_maychieu: false,
+            relay2_den: false,
+            relay3_dieuhoa: false,
+            relay4_quat: false,
             auto_mode: false,
           },
     };
@@ -809,10 +810,10 @@ class SupabaseService {
         const code = r.code || r.id;
         await this.updateRelayControl(code, {
           auto_mode: r.relayControl?.auto_mode ?? false,
-          relay1_den: r.devices.light.isOn,
-          relay2_quat: r.devices.fan.isOn,
-          relay3_maychieu: r.devices.projector.isOn,
-          relay4_dieuhoa: r.devices.ac.isOn,
+          relay1_maychieu: r.devices.projector.isOn,
+          relay2_den: r.devices.light.isOn,
+          relay3_dieuhoa: r.devices.ac.isOn,
+          relay4_quat: r.devices.fan.isOn,
           khan_cap: r.relayAlarm,
         });
       }
@@ -987,39 +988,39 @@ class SupabaseService {
   }
 
   /**
-   * Cập nhật điều khiển Đèn: light_on, light_mode (cả rooms và relay_control)
+   * Cập nhật điều khiển Đèn (Relay 2): light_on, light_mode (cả rooms và relay_control)
    */
   public async updateLight(code: string, light_on: boolean, light_mode?: LightPreset): Promise<boolean> {
     const payload: Partial<DbRoom> = { light_on };
     if (light_mode) payload.light_mode = light_mode;
-    await this.updateRelayControl(code, { relay1_den: light_on, auto_mode: false });
+    await this.updateRelayControl(code, { relay2_den: light_on, auto_mode: false });
     return this.updateRoom(code, payload);
   }
 
   /**
-   * Cập nhật điều khiển Điều hòa: ac_on, ac_temp, ac_mode (cả rooms và relay_control)
+   * Cập nhật điều khiển Điều hòa (Relay 3): ac_on, ac_temp, ac_mode (cả rooms và relay_control)
    */
   public async updateAc(code: string, ac_on: boolean, ac_temp?: number, ac_mode?: AcMode): Promise<boolean> {
     const payload: Partial<DbRoom> = { ac_on };
     if (ac_temp !== undefined) payload.ac_temp = ac_temp;
     if (ac_mode) payload.ac_mode = ac_mode;
-    await this.updateRelayControl(code, { relay4_dieuhoa: ac_on, auto_mode: false });
+    await this.updateRelayControl(code, { relay3_dieuhoa: ac_on, auto_mode: false });
     return this.updateRoom(code, payload);
   }
 
   /**
-   * Cập nhật điều khiển Máy chiếu: projector_on (cả rooms và relay_control)
+   * Cập nhật điều khiển Máy chiếu (Relay 1): projector_on (cả rooms và relay_control)
    */
   public async updateProjector(code: string, projector_on: boolean): Promise<boolean> {
-    await this.updateRelayControl(code, { relay3_maychieu: projector_on, auto_mode: false });
+    await this.updateRelayControl(code, { relay1_maychieu: projector_on, auto_mode: false });
     return this.updateRoom(code, { projector_on });
   }
 
   /**
-   * Cập nhật điều khiển Quạt: fan_on (cả rooms và relay_control)
+   * Cập nhật điều khiển Quạt (Relay 4): fan_on (cả rooms và relay_control)
    */
   public async updateFan(code: string, fan_on: boolean): Promise<boolean> {
-    await this.updateRelayControl(code, { relay2_quat: fan_on, auto_mode: false });
+    await this.updateRelayControl(code, { relay4_quat: fan_on, auto_mode: false });
     return this.updateRoom(code, { fan_on });
   }
 
@@ -1029,10 +1030,10 @@ class SupabaseService {
   public async updatePower(code: string, power_on: boolean): Promise<boolean> {
     if (!power_on) {
       await this.updateRelayControl(code, {
-        relay1_den: false,
-        relay2_quat: false,
-        relay3_maychieu: false,
-        relay4_dieuhoa: false,
+        relay1_maychieu: false,
+        relay2_den: false,
+        relay3_dieuhoa: false,
+        relay4_quat: false,
         auto_mode: false,
       });
     }
@@ -1055,19 +1056,7 @@ class SupabaseService {
   ): Promise<boolean> {
     const level = isAlert ? (smokeLevel ?? 520) : (smokeLevel ?? 0);
 
-    // Nếu kích hoạt báo cháy, ghi ngay bản ghi vào bảng alerts của Supabase
-    if (isAlert) {
-      try {
-        await this.insertAlert({
-          room_code: code,
-          type: 'fire',
-          message: `🚨 BÁO CHÁY KHẨN CẤP tại phòng ${code}! Cảm biến phát hiện khói ${level} ppm.`,
-          level: 'critical',
-        });
-      } catch (err) {
-        console.warn(`[Supabase] Không thể ghi cảnh báo cháy phòng ${code}:`, err);
-      }
-    } else {
+    if (!isAlert) {
       // Khi tắt cảnh báo an toàn, xóa các cảnh báo liên quan của phòng trong bảng alerts
       await this.clearAlertsForRoom(code);
     }
@@ -1191,18 +1180,29 @@ class SupabaseService {
         created_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from('alerts')
-        .insert([newAlertRow])
-        .select()
-        .single();
+      const { data, error } = await this.runWithRetry(async () =>
+        supabase
+          .from('alerts')
+          .insert([newAlertRow])
+          .select()
+          .single()
+      );
 
       if (error) {
         console.error('[Supabase insertAlert] Lỗi ghi cảnh báo vào bảng alerts:', error.message);
+        const isRls = error.code === '42501' || error.message.toLowerCase().includes('row-level security');
+        this.notifyWriteEvent({
+          table: 'alerts',
+          code: alert.room_code,
+          action: `Ghi cảnh báo phòng ${alert.room_code} vào bảng alerts`,
+          success: false,
+          rlsError: isRls,
+          error: error.message,
+        });
         return null;
       }
       return data ? this.mapDbAlertToAlert(data) : null;
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Supabase insertAlert] Ngoại lệ ghi alert:', err);
       return null;
     }
@@ -1771,7 +1771,8 @@ class SupabaseService {
     onSensorDataChange?: (sensor: DbSensorData, eventType?: 'INSERT' | 'UPDATE' | 'DELETE') => void,
     onRelayControlChange?: (rc: DbRelayControl) => void,
     onSchedulesChange?: () => void,
-    onSettingsChange?: () => void
+    onSettingsChange?: () => void,
+    onAlertDelete?: (alertId: string) => void
   ) {
     try {
       const channel = supabase
@@ -1809,8 +1810,15 @@ class SupabaseService {
         )
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'alerts' },
+          { event: '*', schema: 'public', table: 'alerts' },
           (payload) => {
+            if (payload.eventType === 'DELETE' && payload.old) {
+              const oldId = (payload.old as { id?: string | number }).id;
+              if (oldId !== undefined) {
+                onAlertDelete?.(String(oldId));
+              }
+              return;
+            }
             if (payload.new) {
               const mappedAlert = this.mapDbAlertToAlert(payload.new as DbAlert);
               const msgLower = (mappedAlert.message || '').toLowerCase();

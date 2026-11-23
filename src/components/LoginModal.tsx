@@ -19,7 +19,7 @@ import { User, UserRole } from '../types';
 
 interface LoginModalProps {
   users: User[];
-  onLogin: (user: User) => void;
+  onLogin: (user: User, rememberMe?: boolean) => void;
   onRegisterUser?: (userData: { full_name: string; email: string; role: UserRole; password?: string }) => Promise<User | null>;
 }
 
@@ -29,6 +29,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
   // Login form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loginError, setLoginError] = useState('');
 
   // Register form state
@@ -62,7 +63,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
 
-    // Tìm kiếm trong danh sách profiles đã tải từ Supabase
+    // Tìm kiếm chính xác tài khoản trong danh sách profiles đã tải từ Supabase
     const matched = users.find((u) => {
       const uEmail = (u.email || '').toLowerCase();
       const uName = (u.name || '').toLowerCase();
@@ -75,16 +76,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
         uCleanName === cleanInput ||
         uId === input ||
         uEmail.split('@')[0] === input ||
-        uName.includes(input) ||
-        uCleanName.includes(cleanInput) ||
         (input === 'admin' && (u.role === 'admin' || uCleanName.includes('admin')))
       );
     });
 
     if (matched) {
-      onLogin(matched);
+      onLogin(matched, rememberMe);
     } else {
-      setLoginError(`Tài khoản "${email}" không tồn tại trong Database Supabase! Vui lòng kiểm tra lại hoặc chuyển sang tab "Thêm tài khoản DB" để tạo mới.`);
+      setLoginError(`Tài khoản "${email}" không tồn tại trong Database Supabase! Vui lòng nhập đúng Email hoặc Họ tên đầy đủ, hoặc chuyển sang tab "Thêm tài khoản DB" để tạo mới.`);
     }
   };
 
@@ -117,10 +116,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
 
         if (createdUser) {
           const roleTitle = createdUser.role === 'admin' ? 'Quản trị viên' : 'Giám thị';
-          setRegSuccessMsg(`✓ Đã tạo thành công tài khoản [${createdUser.name}] với vai trò [${roleTitle}] và lưu vào Database!`);
-          setTimeout(() => {
-            onLogin(createdUser);
-          }, 1200);
+          setRegSuccessMsg(`✓ Đã tạo thành công tài khoản [${createdUser.name}] (${roleTitle}). Vui lòng chuyển sang tab Đăng nhập để truy cập!`);
+          setEmail(createdUser.email || createdUser.name);
+          setPassword('');
+          setFullName('');
+          setRegEmail('');
+          setRegPassword('');
         } else {
           setRegErrorMsg('Không thể lưu vào database. Vui lòng thử lại!');
         }
@@ -237,9 +238,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
                 </div>
               </div>
 
+              <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none pt-1">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-950 accent-orange-500 cursor-pointer"
+                />
+                <span>Ghi nhớ đăng nhập cho lần sau</span>
+              </label>
+
               <button
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-sm tracking-wide shadow-xl shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+                className="w-full py-3 px-4 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-sm tracking-wide shadow-xl shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
               >
                 <LogIn className="w-4 h-4 stroke-[2.5]" />
                 <span>ĐĂNG NHẬP VÀO HỆ THỐNG</span>
