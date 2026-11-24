@@ -21,9 +21,19 @@ interface LoginModalProps {
   users: User[];
   onLogin: (user: User, rememberMe?: boolean) => void;
   onRegisterUser?: (userData: { full_name: string; email: string; role: UserRole; password?: string }) => Promise<User | null>;
+  connectionError?: string | null;
+  onRetryConnection?: () => void;
+  isRetrying?: boolean;
 }
 
-export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegisterUser }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({
+  users,
+  onLogin,
+  onRegisterUser,
+  connectionError,
+  onRetryConnection,
+  isRetrying = false,
+}) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
 
   // Login form state
@@ -198,6 +208,27 @@ export const LoginModal: React.FC<LoginModalProps> = ({ users, onLogin, onRegist
                 Vui lòng nhập Email hoặc Tên tài khoản của bạn để đăng nhập vào hệ thống điều khiển phòng học.
               </div>
             </div>
+
+            {/* Connection Error Banner */}
+            {connectionError && users.length === 0 && (
+              <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{connectionError}</span>
+                </div>
+                {onRetryConnection && (
+                  <button
+                    type="button"
+                    onClick={onRetryConnection}
+                    disabled={isRetrying}
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-[11px] shrink-0 flex items-center gap-1"
+                  >
+                    {isRetrying && <Loader2 className="w-3 h-3 animate-spin" />}
+                    <span>Thử lại</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Error banner */}
             {loginError && (

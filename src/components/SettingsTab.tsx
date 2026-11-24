@@ -648,14 +648,25 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <div>
               <h3 className="font-bold text-white text-base">Cơ sở dữ liệu Supabase Cloud</h3>
               <p className="text-xs text-slate-400">
-                Đã kết nối với Database <span className="font-mono text-emerald-400">{supabaseInfo?.projectId || 'cuygczfkktprkyosabtu'}</span>
+                {supabaseInfo?.isConnected !== false ? 'Đã kết nối với Database' : 'Đang mất kết nối tới Database'}{' '}
+                <span className="font-mono text-emerald-400">{supabaseInfo?.projectId || 'cuygczfkktprkyosabtu'}</span>
               </p>
             </div>
           </div>
 
-          <span className="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Đã kết nối
+          <span
+            className={`px-3 py-1 rounded-xl border text-xs font-bold flex items-center gap-1.5 ${
+              supabaseInfo?.isConnected !== false
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                : 'bg-red-500/20 text-red-300 border-red-500/40'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                supabaseInfo?.isConnected !== false ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
+              }`}
+            ></span>
+            {supabaseInfo?.isConnected !== false ? 'Đã kết nối' : 'Mất kết nối'}
           </span>
         </div>
 
