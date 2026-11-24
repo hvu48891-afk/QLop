@@ -105,54 +105,45 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
   return (
     <div className="space-y-5 pb-24 lg:pb-12">
       {/* Summary Header: Classroom Inventory & Database Status */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-4 sm:p-5 rounded-3xl shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="theme-surface border p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
-              <span>{rooms.length} Phòng học</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-bold border border-orange-500/30">
-                Toàn trường
-              </span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h3 className="text-lg font-extrabold theme-text tracking-tight">
+              {rooms.length} Phòng học
             </h3>
-
-            {/* DB Room Count Badge */}
-            <div
+            <span className="text-xs theme-text-muted">·</span>
+            <span className="text-xs font-semibold theme-accent-text">Toàn trường</span>
+            <span className="text-xs theme-text-muted">·</span>
+            <span
               title={`Số phòng học lưu trong Supabase: ${dbRoomCount ?? 'Chưa rõ'}`}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border ${
-                dbRoomCount === rooms.length
-                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-                  : 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+              className={`text-xs font-semibold flex items-center gap-1 font-mono tabular-nums ${
+                dbRoomCount === rooms.length ? 'text-emerald-400' : 'text-amber-400'
               }`}
             >
               <Database className="w-3.5 h-3.5" />
               <span>DB: {dbRoomCount !== undefined ? `${dbRoomCount} phòng` : 'Đã kết nối'}</span>
-              {dbRoomCount === rooms.length && <Check className="w-3 h-3 text-emerald-400" />}
-            </div>
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-slate-400">
-            <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300">
-              Tòa A: <strong className="text-white">{countA}</strong> phòng
-            </span>
-            <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300">
-              Tòa B: <strong className="text-white">{countB}</strong> phòng
-            </span>
-            <span className="px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300">
-              Tòa C: <strong className="text-white">{countC}</strong> phòng
-            </span>
-            <span className="text-slate-500">•</span>
-            <span>Hiển thị: <strong className="text-orange-400 font-mono">{filteredRooms.length}</strong> phòng</span>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs theme-text-muted tabular-nums">
+            <span>Tòa A: <strong className="theme-text">{countA}</strong></span>
+            <span aria-hidden="true">·</span>
+            <span>Tòa B: <strong className="theme-text">{countB}</strong></span>
+            <span aria-hidden="true">·</span>
+            <span>Tòa C: <strong className="theme-text">{countC}</strong></span>
+            <span aria-hidden="true">·</span>
+            <span>Hiển thị: <strong className="theme-accent-text font-mono">{filteredRooms.length}</strong> phòng</span>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* Chỉ hiển thị nút Thêm phòng học cho tài khoản Quản trị viên (Admin) */}
           {isAdmin && onOpenAddRoomModal && (
             <button
+              type="button"
               onClick={onOpenAddRoomModal}
               title="Thêm phòng học mới vào hệ thống (Chỉ Quản trị viên)"
-              className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap"
+              className="flex-1 md:flex-none px-3.5 py-2 rounded-xl theme-accent-bg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm whitespace-nowrap"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Thêm phòng học</span>
@@ -161,10 +152,11 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
           {onPushToDatabase && (
             <button
+              type="button"
               onClick={onPushToDatabase}
               disabled={isSyncingDb}
               title="Đồng bộ danh sách phòng học hiện tại vào Supabase Database"
-              className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+              className="flex-1 md:flex-none px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm disabled:opacity-50 whitespace-nowrap"
             >
               <Database className={`w-3.5 h-3.5 ${isSyncingDb ? 'animate-spin' : ''}`} />
               <span>{isSyncingDb ? 'Đang đồng bộ...' : 'Đẩy lên DB'}</span>
@@ -173,21 +165,22 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
 
           {onFetchFromDatabase && (
             <button
+              type="button"
               onClick={onFetchFromDatabase}
               title="Tải danh sách phòng học từ Supabase về hệ thống"
-              className="flex-1 md:flex-none px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+              className="flex-1 md:flex-none px-3 py-2 rounded-xl theme-elevated border text-cyan-400 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
             >
-              <Database className="w-3.5 h-3.5 text-cyan-400" />
+              <Database className="w-3.5 h-3.5" />
               <span>Nạp từ DB</span>
             </button>
           )}
 
-          {/* Chỉ hiển thị nút Xóa phòng ngoài DB cho Quản trị viên (Admin) */}
           {isAdmin && onPurgeNonDbRooms && (
             <button
+              type="button"
               onClick={onPurgeNonDbRooms}
               title="Xóa tất cả các phòng không có trong Database Supabase (Chỉ Quản trị viên)"
-              className="flex-1 md:flex-none px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-red-950/40 text-red-400 hover:text-red-300 border border-red-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+              className="flex-1 md:flex-none px-3 py-2 rounded-xl theme-elevated text-red-400 border border-red-500/30 hover:bg-red-500/15 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Xoá phòng ngoài DB</span>
@@ -262,7 +255,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
           })()}
         </div>
 
-        {/* Master School Power Cut Trigger (Sáng khi ở Admin, các cấp quyền khác thì không nhấn được) */}
+        {/* Master School Power Cut Trigger */}
         {onOpenSchoolPowerModal && (
           <button
             type="button"
@@ -270,18 +263,18 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             disabled={!isAdmin}
             title={
               isAdmin
-                ? "Cầu dao tổng trường: Mở bảng điều khiển tắt/cắt điện toàn trường (Quản trị viên)"
-                : "Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng toàn trường!"
+                ? 'Cầu dao tổng trường: Mở bảng điều khiển tắt/cắt điện toàn trường (Quản trị viên)'
+                : 'Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng toàn trường!'
             }
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap ${
               isAdmin
-                ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border border-red-400 text-white shadow-red-600/30 ring-2 ring-red-400/50 active:scale-95 cursor-pointer animate-pulse'
-                : 'bg-slate-900/50 border border-slate-800 text-slate-500 opacity-40 cursor-not-allowed select-none'
+                ? 'bg-red-600 hover:bg-red-500 border border-red-500 text-white shadow-sm cursor-pointer'
+                : 'theme-inset border theme-text-muted opacity-50 cursor-not-allowed select-none'
             }`}
           >
-            <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-yellow-300 stroke-[2.5]' : 'text-slate-600'}`} />
+            <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-amber-200' : 'theme-text-muted'}`} />
             <span>Cầu dao tổng trường</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-slate-500 ml-0.5" />}
+            {!isAdmin && <Lock className="w-3 h-3 ml-0.5" />}
           </button>
         )}
       </div>
@@ -293,17 +286,13 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
           const isPowerOn = (room.status === 'on' || (room.isPowerOn && room.status !== 'off')) && !room.emergencyPowerCut;
           const isMasterPowerCut = !room.isPowerOn || room.emergencyPowerCut;
 
-          // Card Background & Border Style as specified:
-          // off = xám
-          // on = sáng
-          // alert = đỏ nhấp nháy
-          let cardStyle = 'bg-slate-900/60 border-slate-800 text-slate-400';
+          let cardStyle = 'theme-surface border theme-text-secondary';
           if (isAlarm) {
             cardStyle =
-              'bg-red-950/90 border-red-500 ring-2 ring-red-500 animate-pulse text-red-100 shadow-2xl shadow-red-500/30';
+              'bg-red-950/90 border-red-500 ring-2 ring-red-500 animate-pulse text-red-100 shadow-lg';
           } else if (isPowerOn) {
             cardStyle =
-              'bg-gradient-to-b from-slate-900 to-slate-900/90 border-amber-500/50 shadow-xl shadow-amber-500/10 text-slate-200 ring-1 ring-amber-500/20';
+              'theme-surface border-amber-500/50 ring-1 ring-amber-500/20 theme-text';
           }
 
           const isHardwareRoom = room.code === 'A201';
@@ -312,7 +301,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({
             <div
               key={room.id}
               onClick={() => onSelectRoom(room)}
-              className={`group relative rounded-3xl p-5 border transition-all duration-200 cursor-pointer hover:scale-[1.02] flex flex-col justify-between ${cardStyle}`}
+              className={`group relative rounded-2xl p-5 border transition-transform duration-150 cursor-pointer hover:-translate-y-0.5 flex flex-col justify-between ${cardStyle}`}
             >
               {/* Header inside Room Card */}
               <div className="flex items-start justify-between gap-2 mb-3">

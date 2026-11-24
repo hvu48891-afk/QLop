@@ -1,107 +1,317 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 
 :root {
-  --app-bg: #020617;
-  --app-surface: #0f172a;
-  --app-surface-elevated: #1e293b;
-  --app-surface-alpha: rgba(15, 23, 42, 0.85);
+  --app-bg: #070b14;
+  --app-bg-image: none;
+  --app-bg-size: auto;
+  --app-surface: #0e1525;
+  --app-surface-inset: #0a101d;
+  --app-surface-elevated: #172136;
+  --app-surface-alpha: rgba(14, 21, 37, 0.9);
   --app-border: #1e293b;
   --app-border-elevated: #334155;
-  --app-header-bg: rgba(2, 6, 23, 0.92);
-  --app-sidebar-bg: #020617;
-  --app-bg-color: #020617;
+  --app-header-bg: rgba(7, 11, 20, 0.86);
+  --app-sidebar-bg: #090e1a;
+  --app-text: #f8fafc;
+  --app-text-secondary: #cbd5e1;
+  --app-text-muted: #94a3b8;
+  --app-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+  --app-grid-color: rgba(148, 163, 184, 0.05);
+  --app-accent: #f97316;
+  --app-accent-hover: #fb923c;
+  --app-accent-soft: rgba(249, 115, 22, 0.14);
+  --app-accent-contrast: #ffffff;
 }
 
 @layer base {
+  html,
   body {
-    background-color: var(--app-bg, #020617);
-    @apply text-slate-100;
+    font-family: var(--font-sans);
+    background-color: var(--app-bg);
+    color: var(--app-text);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-tap-highlight-color: transparent;
-    transition: background-color 0.25s ease, border-color 0.25s ease;
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
   }
 }
 
 /* ========================================================
-   FULL-APP DYNAMIC THEME SYSTEM ("Đổi màu cả web")
-   Overrides surface backgrounds, headers, sidebars, panels,
-   cards, inputs, and borders so the active theme re-colors
-   the entire website cohesively.
+   SEMANTIC THEME SURFACES & TYPOGRAPHY
+   Supports Dark, Light, Custom HEX, Accent & Canvas Styles
    ======================================================== */
 
-/* 1. Base App & Sidebar Backgrounds */
-.bg-slate-950 {
-  background-color: var(--app-bg) !important;
+.app-canvas {
+  background-color: var(--app-bg);
+  background-image: var(--app-bg-image);
+  background-size: var(--app-bg-size);
+  color: var(--app-text);
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
 }
 
+.theme-surface {
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+  box-shadow: var(--app-shadow);
+}
+
+.theme-surface-flat {
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+.theme-inset {
+  background-color: var(--app-surface-inset);
+  border-color: var(--app-border);
+}
+
+.theme-elevated {
+  background-color: var(--app-surface-elevated);
+  border-color: var(--app-border-elevated);
+}
+
+.theme-header {
+  background-color: var(--app-header-bg);
+  border-color: var(--app-border);
+}
+
+.theme-sidebar {
+  background-color: var(--app-sidebar-bg);
+  border-color: var(--app-border);
+}
+
+.theme-input {
+  background-color: var(--app-surface-inset);
+  border-color: var(--app-border-elevated);
+  color: var(--app-text);
+}
+
+.theme-input::placeholder {
+  color: var(--app-text-muted);
+}
+
+.theme-input:focus {
+  border-color: var(--app-accent);
+  outline: none;
+}
+
+.theme-text {
+  color: var(--app-text);
+}
+
+.theme-text-secondary {
+  color: var(--app-text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--app-text-muted);
+}
+
+.theme-border {
+  border-color: var(--app-border);
+}
+
+.theme-border-strong {
+  border-color: var(--app-border-elevated);
+}
+
+.theme-accent-bg {
+  background-color: var(--app-accent);
+  color: var(--app-accent-contrast);
+}
+
+.theme-accent-bg:hover {
+  background-color: var(--app-accent-hover);
+}
+
+.theme-accent-text {
+  color: var(--app-accent);
+}
+
+.theme-accent-soft {
+  background-color: var(--app-accent-soft);
+  color: var(--app-accent);
+}
+
+/* Smooth Surface Bridge for Legacy Slate Classes Across Themes */
+.bg-slate-950,
 .bg-slate-950\/95,
 .bg-slate-950\/90,
 .bg-slate-950\/85,
 .bg-slate-950\/80,
-.bg-slate-950\/70 {
-  background-color: var(--app-header-bg) !important;
+.bg-slate-950\/70,
+.bg-slate-950\/60,
+.bg-slate-950\/40 {
+  background-color: var(--app-surface-inset);
 }
 
-/* 2. Main Surface (Cards, Panels, Modals, Stat Boxes) */
-.bg-slate-900 {
-  background-color: var(--app-surface) !important;
-}
-
+.bg-slate-900,
+.bg-slate-900\/95,
 .bg-slate-900\/90,
 .bg-slate-900\/80,
 .bg-slate-900\/70,
 .bg-slate-900\/60,
 .bg-slate-900\/50,
-.bg-slate-900\/40,
-.bg-slate-900\/30 {
-  background-color: var(--app-surface-alpha) !important;
+.bg-slate-900\/40 {
+  background-color: var(--app-surface);
 }
 
-/* 3. Elevated Surfaces (Inputs, Buttons, Dropdowns, Hover States) */
-.bg-slate-800 {
-  background-color: var(--app-surface-elevated) !important;
+.bg-slate-800,
+.bg-slate-800\/80,
+.bg-slate-800\/70,
+.bg-slate-800\/60 {
+  background-color: var(--app-surface-elevated);
 }
 
-.hover\:bg-slate-800:hover {
-  background-color: var(--app-surface-elevated) !important;
+.hover\:bg-slate-800:hover,
+.hover\:bg-slate-800\/70:hover,
+.hover\:bg-slate-800\/40:hover,
+.hover\:bg-slate-800\/30:hover,
+.hover\:bg-slate-700:hover,
+.hover\:bg-slate-900\/60:hover {
+  background-color: var(--app-surface-elevated);
 }
 
-.hover\:bg-slate-900\/60:hover,
-.hover\:bg-slate-900:hover {
-  background-color: var(--app-surface-elevated) !important;
-}
-
-/* 4. Borders & Dividers */
 .border-slate-800,
 .border-slate-800\/80,
+.border-slate-800\/70,
 .border-slate-800\/60,
 .border-slate-800\/50,
-.border-slate-800\/40 {
-  border-color: var(--app-border) !important;
+.divide-slate-800\/60 > :not(:last-child) {
+  border-color: var(--app-border);
 }
 
 .border-slate-700,
 .border-slate-700\/80,
-.border-slate-700\/60,
-.border-slate-700\/50 {
-  border-color: var(--app-border-elevated) !important;
+.border-slate-700\/60 {
+  border-color: var(--app-border-elevated);
 }
 
-/* 5. Custom Smooth Dark Scrollbar */
+/* Light-mode legible contrast adjustments for legacy dark-only slate text */
+html[data-theme-mode="light"] .text-white:not([class*="bg-red-"]):not([class*="bg-emerald-"]):not([class*="bg-blue-"]):not([class*="bg-purple-"]):not([class*="bg-orange-"]):not([class*="bg-amber-"]):not([class*="bg-cyan-"]):not([class*="bg-slate-9"]):not([class*="bg-gradient-to-r"]) {
+  color: var(--app-text);
+}
+
+html[data-theme-mode="light"] .text-slate-100,
+html[data-theme-mode="light"] .text-slate-200 {
+  color: var(--app-text);
+}
+
+html[data-theme-mode="light"] .text-slate-300 {
+  color: var(--app-text-secondary);
+}
+
+html[data-theme-mode="light"] .text-slate-400,
+html[data-theme-mode="light"] .text-slate-500 {
+  color: var(--app-text-muted);
+}
+
+html[data-theme-mode="light"] .hover\:text-white:hover:not([class*="hover:bg-red-"]):not([class*="hover:bg-emerald-"]):not([class*="hover:bg-blue-"]) {
+  color: var(--app-text);
+}
+
+html[data-theme-mode="light"] .text-amber-300,
+html[data-theme-mode="light"] .text-amber-400 {
+  color: #b45309;
+}
+
+html[data-theme-mode="light"] .text-emerald-300,
+html[data-theme-mode="light"] .text-emerald-400 {
+  color: #047857;
+}
+
+html[data-theme-mode="light"] .text-cyan-300,
+html[data-theme-mode="light"] .text-cyan-400 {
+  color: #0369a1;
+}
+
+html[data-theme-mode="light"] .text-orange-300,
+html[data-theme-mode="light"] .text-orange-400 {
+  color: #c2410c;
+}
+
+html[data-theme-mode="light"] .text-purple-300,
+html[data-theme-mode="light"] .text-purple-400 {
+  color: #6d28d9;
+}
+
+html[data-theme-mode="light"] .text-blue-300,
+html[data-theme-mode="light"] .text-blue-400 {
+  color: #1d4ed8;
+}
+
+html[data-theme-mode="light"] .text-red-200,
+html[data-theme-mode="light"] .text-red-300 {
+  color: #b91c1c;
+}
+
+html[data-theme-mode="light"] .text-amber-200,
+html[data-theme-mode="light"] .text-orange-200,
+html[data-theme-mode="light"] .text-blue-200,
+html[data-theme-mode="light"] .text-emerald-200 {
+  color: #1e293b;
+}
+
+html[data-theme-mode="light"] .bg-emerald-950\/60,
+html[data-theme-mode="light"] .bg-emerald-950\/30,
+html[data-theme-mode="light"] .bg-emerald-950\/10 {
+  background-color: rgba(16, 185, 129, 0.1);
+}
+
+html[data-theme-mode="light"] .bg-amber-950\/60,
+html[data-theme-mode="light"] .bg-amber-950\/30,
+html[data-theme-mode="light"] .bg-amber-950\/20,
+html[data-theme-mode="light"] .bg-orange-950\/80 {
+  background-color: rgba(245, 158, 11, 0.12);
+}
+
+html[data-theme-mode="light"] .bg-cyan-950\/30 {
+  background-color: rgba(14, 165, 233, 0.1);
+}
+
+html[data-theme-mode="light"] .bg-purple-950\/30,
+html[data-theme-mode="light"] .bg-purple-950\/20 {
+  background-color: rgba(139, 92, 246, 0.1);
+}
+
+html[data-theme-mode="light"] .bg-blue-950\/40 {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+html[data-theme-mode="light"] .bg-red-950\/90,
+html[data-theme-mode="light"] .bg-red-950\/80,
+html[data-theme-mode="light"] .bg-red-950\/60,
+html[data-theme-mode="light"] .bg-red-950\/50,
+html[data-theme-mode="light"] .bg-red-950\/40,
+html[data-theme-mode="light"] .bg-red-950\/30 {
+  background-color: rgba(239, 68, 68, 0.12);
+}
+
+html[data-theme-mode="light"] [class*="bg-gradient-to-"][class*="from-slate-9"] {
+  background-image: none;
+  background-color: var(--app-surface);
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--app-bg, #020617);
+  background: var(--app-bg);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--app-border-elevated, #334155);
+  background: var(--app-border-elevated);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(249, 115, 22, 0.8);
+  background: var(--app-accent);
 }

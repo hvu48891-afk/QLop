@@ -41,7 +41,7 @@ import { SchoolPowerModal } from './components/SchoolPowerModal';
 import { AddRoomModal } from './components/AddRoomModal';
 import { SqlHelperModal } from './components/SqlHelperModal';
 import { ThemeColorModal } from './components/ThemeColorModal';
-import { themeManager } from './utils/themeManager';
+import { themeManager, BackgroundStyle } from './utils/themeManager';
 import { Flame, Bell, X, ShieldAlert, Clock, Zap, Loader2, AlertCircle, CheckCircle2, RefreshCw, Database, Terminal, Trash2, Palette } from 'lucide-react';
 
 export default function App() {
@@ -91,6 +91,8 @@ export default function App() {
   const [currentThemeId, setCurrentThemeId] = useState<string>(() => themeManager.getCurrentThemeId());
   const [customBgColor, setCustomBgColor] = useState<string>(() => themeManager.getCustomColor());
   const [actualBgColor, setActualBgColor] = useState<string>(() => themeManager.getEffectiveBackgroundColor());
+  const [currentAccentId, setCurrentAccentId] = useState<string>(() => themeManager.getAccentId());
+  const [currentBgStyle, setCurrentBgStyle] = useState<BackgroundStyle>(() => themeManager.getBgStyle());
 
   // Keep refs for freshness
   const rulesRef = useRef(rules);
@@ -1913,51 +1915,62 @@ export default function App() {
     if (customHex) {
       setCustomBgColor(customHex);
     }
-    const appliedPalette = themeId === 'custom' && customHex 
-      ? themeManager.setCustomColor(customHex) 
-      : themeManager.setTheme(themeId, customHex);
+    const appliedPalette =
+      themeId === 'custom' && customHex
+        ? themeManager.setCustomColor(customHex)
+        : themeManager.setTheme(themeId, customHex);
     setActualBgColor(appliedPalette.bg);
+    setCurrentAccentId(themeManager.getAccentId());
 
-    const themeName = themeId === 'custom' 
-      ? `màu tự do (${customHex})` 
-      : themeId === 'oled' 
-      ? 'Đen OLED Tuyệt Đối' 
-      : themeId === 'navy' 
-      ? 'Xanh Biển Sâu' 
-      : themeId === 'emerald' 
-      ? 'Xanh Rừng Đêm' 
-      : themeId === 'violet' 
-      ? 'Tím Không Gian' 
-      : themeId === 'charcoal' 
-      ? 'Xám Than Chì' 
-      : themeId === 'steel'
-      ? 'Xanh Thép Công Nghiệp'
-      : themeId === 'dark-amber'
-      ? 'Nâu Cà Phê Trầm'
-      : themeId === 'crimson'
-      ? 'Đỏ Rượu Vang'
-      : themeId;
+    const themeLabelMap: Record<string, string> = {
+      midnight: 'Tối Huyền Bí',
+      navy: 'Xanh Biển Sâu',
+      oled: 'Đen Carbon OLED',
+      emerald: 'Xanh Rừng Đêm',
+      violet: 'Tím Không Gian',
+      espresso: 'Nâu Trầm Ấm',
+      alabaster: 'Sáng Tinh Khôi',
+      sky: 'Xanh Mây Nhẹ',
+      sage: 'Xanh Bạc Hà Nhẹ',
+      ivory: 'Kem Thanh Lịch',
+    };
+    const themeName =
+      themeId === 'custom' ? `màu tự do (${customHex})` : themeLabelMap[themeId] || themeId;
 
     logActivity(`Đổi màu toàn bộ website sang [${themeName}]`, 'THEME', 'Giao diện');
     setDbSyncToast({
-      message: `Đã đổi màu toàn bộ website sang [${themeName}]!`,
+      message: `Đã đổi giao diện sang [${themeName}]!`,
       type: 'info',
     });
-    setTimeout(() => setDbSyncToast(null), 3000);
+  };
+
+  const handleSelectAccent = (accentId: string) => {
+    const acc = themeManager.setAccent(accentId);
+    setCurrentAccentId(acc.id);
+    setDbSyncToast({
+      message: `Đã đổi màu nhấn sang [${acc.name}]!`,
+      type: 'info',
+    });
+  };
+
+  const handleSelectBgStyle = (style: BackgroundStyle) => {
+    const updated = themeManager.setBgStyle(style);
+    setCurrentBgStyle(updated);
   };
 
   const handleResetDefaultTheme = () => {
     const defaultPalette = themeManager.resetToDefault();
     setCurrentThemeId('midnight');
-    setCustomBgColor('#020617');
+    setCustomBgColor('#070b14');
     setActualBgColor(defaultPalette.bg);
+    setCurrentAccentId(themeManager.getAccentId());
+    setCurrentBgStyle(themeManager.getBgStyle());
 
-    logActivity('Khôi phục giao diện toàn bộ website mặc định (Midnight Slate)', 'THEME', 'Giao diện');
+    logActivity('Khôi phục giao diện mặc định (Tối Huyền Bí)', 'THEME', 'Giao diện');
     setDbSyncToast({
-      message: 'Đã khôi phục giao diện toàn bộ website về mặc định (Midnight Slate)!',
+      message: 'Đã khôi phục giao diện về mặc định!',
       type: 'success',
     });
-    setTimeout(() => setDbSyncToast(null), 3000);
   };
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId || r.code === selectedRoomId);
@@ -2040,18 +2053,15 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div
-        className="min-h-screen text-slate-100 flex flex-col items-center justify-center antialiased selection:bg-orange-500 selection:text-slate-950 transition-colors duration-300"
-        style={{ backgroundColor: actualBgColor }}
-      >
+      <div className="min-h-screen app-canvas flex flex-col items-center justify-center antialiased selection:bg-[var(--app-accent)] selection:text-white">
         {isLoading && !hasInitializedSessionRef.current ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-4">
-            <div className="w-14 h-14 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-orange-400 shadow-xl">
-              <Loader2 className="w-8 h-8 animate-spin" />
+            <div className="w-14 h-14 rounded-2xl theme-surface border flex items-center justify-center theme-accent-text shadow-lg">
+              <Loader2 className="w-7 h-7 animate-spin" />
             </div>
             <div className="text-center">
-              <h4 className="font-bold text-white text-base">Đang kết nối dữ liệu Supabase...</h4>
-              <p className="text-xs text-slate-400 mt-1">Vui lòng chờ trong giây lát trước khi đăng nhập</p>
+              <h4 className="font-bold theme-text text-base">Đang kết nối dữ liệu Supabase...</h4>
+              <p className="text-xs theme-text-muted mt-1">Vui lòng chờ trong giây lát trước khi đăng nhập</p>
             </div>
           </div>
         ) : (
@@ -2083,10 +2093,7 @@ export default function App() {
   }
 
   return (
-    <div 
-      className="min-h-screen text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-slate-950 transition-colors duration-300"
-      style={{ backgroundColor: actualBgColor }}
-    >
+    <div className="min-h-screen app-canvas flex flex-col antialiased selection:bg-[var(--app-accent)] selection:text-white">
       {/* CẢNH BÁO KHẨN CẤP AN TOÀN (BÁO CHÁY / KHÓI / QUÁ NHIỆT) */}
       {activeCriticalRoom && (
         <div className="fixed top-3 left-4 right-4 sm:left-auto sm:right-6 z-50 max-w-lg bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 border-2 border-red-400 animate-bounce">
@@ -2173,6 +2180,7 @@ export default function App() {
             poweredOnCount={rooms.filter((r) => r.status === 'on' || r.status === 'alert').length}
             onSyncDatabase={loadAllSupabaseData}
             isSyncing={isLoading}
+            actualBgColor={actualBgColor}
           />
 
           {/* Banner cảnh báo RLS nếu database đang chặn ghi */}
@@ -2349,7 +2357,11 @@ export default function App() {
                     isPushingDb={isPushingDb || isLoading}
                     currentThemeId={currentThemeId}
                     customColor={customBgColor}
+                    currentAccentId={currentAccentId}
+                    currentBgStyle={currentBgStyle}
                     onSelectTheme={handleSelectTheme}
+                    onSelectAccent={handleSelectAccent}
+                    onSelectBgStyle={handleSelectBgStyle}
                     onResetDefaultTheme={handleResetDefaultTheme}
                     onOpenThemeModal={() => setIsThemeModalOpen(true)}
                   />
@@ -2446,7 +2458,11 @@ export default function App() {
         onClose={() => setIsThemeModalOpen(false)}
         currentThemeId={currentThemeId}
         customColor={customBgColor}
+        currentAccentId={currentAccentId}
+        currentBgStyle={currentBgStyle}
         onSelectTheme={handleSelectTheme}
+        onSelectAccent={handleSelectAccent}
+        onSelectBgStyle={handleSelectBgStyle}
         onResetDefault={handleResetDefaultTheme}
       />
 

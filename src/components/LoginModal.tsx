@@ -144,35 +144,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="w-full max-w-lg theme-surface border rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-3xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center mx-auto shadow-xl shadow-orange-500/25 mb-3">
-            <Cpu className="w-8 h-8 text-slate-950 stroke-[2.5]" />
+          <div className="w-13 h-13 rounded-2xl theme-accent-bg flex items-center justify-center mx-auto shadow-md mb-3">
+            <Cpu className="w-7 h-7 stroke-[2.4]" />
           </div>
-          <h2 className="text-2xl font-black text-white tracking-tight">Smart Classroom IoT</h2>
-          <p className="text-xs text-slate-400">
-            Hệ thống Quản lý và Điều khiển Phòng học Thông minh • THPT Chuyên
+          <h2 className="text-2xl font-extrabold theme-text tracking-tight">Smart Classroom IoT</h2>
+          <p className="text-xs theme-text-muted">
+            Hệ thống Quản lý và Điều khiển Phòng học Thông minh · THPT Chuyên
           </p>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-[11px] text-cyan-300 font-mono">
-            <Database className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Supabase Cloud Database Sync</span>
-          </div>
         </div>
 
         {/* Tab Switcher: Đăng nhập vs Tạo tài khoản */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-bold">
+        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl theme-inset border text-xs font-bold">
           <button
             type="button"
             onClick={() => {
               setActiveTab('login');
               setLoginError('');
             }}
-            className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
+            className={`py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'login'
-                ? 'bg-orange-500 text-slate-950 shadow-md shadow-orange-500/20'
-                : 'text-slate-400 hover:text-white'
+                ? 'theme-accent-bg shadow-sm'
+                : 'theme-text-muted hover:theme-text'
             }`}
           >
             <LogIn className="w-4 h-4" />
@@ -186,10 +182,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               setRegErrorMsg('');
               setRegSuccessMsg('');
             }}
-            className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
+            className={`py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'register'
-                ? 'bg-orange-500 text-slate-950 shadow-md shadow-orange-500/20'
-                : 'text-slate-400 hover:text-white'
+                ? 'theme-accent-bg shadow-sm'
+                : 'theme-text-muted hover:theme-text'
             }`}
           >
             <UserPlus className="w-4 h-4" />
@@ -281,10 +277,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
               <button
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-sm tracking-wide shadow-xl shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
+                className="w-full py-3 px-4 rounded-xl theme-accent-bg font-bold text-sm tracking-wide shadow-sm transition-colors flex items-center justify-center gap-2 mt-2"
               >
-                <LogIn className="w-4 h-4 stroke-[2.5]" />
-                <span>ĐĂNG NHẬP VÀO HỆ THỐNG</span>
+                <LogIn className="w-4 h-4 stroke-[2.4]" />
+                <span>Đăng nhập vào hệ thống</span>
               </button>
             </form>
           </div>

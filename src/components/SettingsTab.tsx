@@ -28,7 +28,7 @@ import {
   Pipette
 } from 'lucide-react';
 import { ThresholdSettings, User, UserRole } from '../types';
-import { PRESET_THEMES } from '../utils/themeManager';
+import { PRESET_THEMES, ACCENT_OPTIONS, BackgroundStyle } from '../utils/themeManager';
 
 interface SettingsTabProps {
   settings: ThresholdSettings;
@@ -61,7 +61,11 @@ interface SettingsTabProps {
   isPushingDb?: boolean;
   currentThemeId?: string;
   customColor?: string;
+  currentAccentId?: string;
+  currentBgStyle?: BackgroundStyle;
   onSelectTheme?: (themeId: string, customHex?: string) => void;
+  onSelectAccent?: (accentId: string) => void;
+  onSelectBgStyle?: (style: BackgroundStyle) => void;
   onResetDefaultTheme?: () => void;
   onOpenThemeModal?: () => void;
 }
@@ -84,7 +88,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   isPushingDb,
   currentThemeId,
   customColor,
+  currentAccentId = 'orange',
+  currentBgStyle = 'ambient',
   onSelectTheme,
+  onSelectAccent,
+  onSelectBgStyle,
   onResetDefaultTheme,
   onOpenThemeModal,
 }) => {
@@ -337,72 +345,96 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
-      {/* ================= 2. GIAO DIỆN & MÀU TOÀN BỘ WEBSITE ================= */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+      {/* ================= 2. GIAO DIỆN & MÀU NỀN WEBSITE ================= */}
+      <div className="theme-surface border rounded-2xl p-5 sm:p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b theme-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl theme-accent-soft flex items-center justify-center shrink-0">
               <Palette className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Giao diện & Màu sắc toàn bộ website</h3>
-              <p className="text-xs text-slate-400">
-                Đổi màu đồng bộ cho thanh điều hướng, thanh tiêu đề, các thẻ phòng học và đường viền
+              <h3 className="font-bold theme-text text-base">Giao diện & Màu nền hệ thống</h3>
+              <p className="text-xs theme-text-muted">
+                Chuyển đổi nhanh giữa nền Tối, nền Sáng, màu nhấn và hiệu ứng bề mặt
               </p>
             </div>
           </div>
 
           {onOpenThemeModal && (
             <button
+              type="button"
               onClick={onOpenThemeModal}
-              className="px-3.5 py-2 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/40 text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-auto active:scale-95 shadow-sm"
+              className="px-3.5 py-2 rounded-xl theme-accent-bg text-xs font-bold transition-colors flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
             >
               <Palette className="w-3.5 h-3.5" />
-              <span>Bảng màu đầy đủ</span>
+              <span>Mở trình tùy chỉnh đầy đủ</span>
             </button>
           )}
         </div>
 
-        {/* Quick Presets Grid */}
+        {/* Presets Grid (Dark + Light) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-300">Bảng màu tiêu chuẩn hệ thống:</span>
+            <span className="font-semibold theme-text-secondary">Chủ đề nền chuẩn (Tối & Sáng):</span>
             {currentThemeId && (
-              <span className="text-[11px] text-orange-400 font-mono">
-                Đang dùng: {currentThemeId === 'custom' ? `Tự chọn (${customColor})` : PRESET_THEMES.find(t => t.id === currentThemeId)?.name || currentThemeId}
+              <span className="text-[11px] theme-accent-text font-mono">
+                Đang dùng:{' '}
+                {currentThemeId === 'custom'
+                  ? `Tự chọn (${customColor})`
+                  : PRESET_THEMES.find((t) => t.id === currentThemeId)?.name || currentThemeId}
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {PRESET_THEMES.slice(0, 8).map((preset) => {
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            {PRESET_THEMES.map((preset) => {
               const isSelected = currentThemeId === preset.id;
               return (
                 <button
                   key={preset.id}
                   type="button"
                   onClick={() => onSelectTheme && onSelectTheme(preset.id)}
-                  className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between h-20 active:scale-95 ${
-                    isSelected
-                      ? 'border-orange-500 ring-2 ring-orange-500/40 shadow-lg'
-                      : 'border-slate-800 hover:border-slate-700 hover:scale-[1.02]'
-                  }`}
-                  style={{ backgroundColor: preset.palette.bg }}
+                  className="p-3 rounded-xl border text-left transition-all flex flex-col justify-between h-20 hover:scale-[1.01] active:scale-95"
+                  style={{
+                    backgroundColor: preset.palette.bg,
+                    borderColor: isSelected ? 'var(--app-accent)' : preset.palette.border,
+                    boxShadow: isSelected ? '0 0 0 1px var(--app-accent)' : 'none',
+                  }}
                 >
                   <div className="flex items-center justify-between">
-                    <span 
-                      className="w-3.5 h-3.5 rounded-full border border-white/30" 
-                      style={{ backgroundColor: preset.palette.surface }} 
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border"
+                      style={{
+                        backgroundColor: preset.palette.surface,
+                        borderColor: preset.palette.borderElevated,
+                      }}
                     />
-                    {isSelected && (
-                      <span className="w-4 h-4 rounded-full bg-orange-500 text-slate-950 flex items-center justify-center font-bold">
-                        <Check className="w-3 h-3 stroke-[3]" />
+                    {isSelected ? (
+                      <span className="w-4 h-4 rounded-full theme-accent-bg flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    ) : (
+                      <span
+                        className="text-[9px] font-semibold uppercase"
+                        style={{ color: preset.palette.textMuted }}
+                      >
+                        {preset.mode === 'light' ? 'Sáng' : 'Tối'}
                       </span>
                     )}
                   </div>
                   <div>
-                    <p className="font-bold text-xs text-white truncate">{preset.name}</p>
-                    <p className="text-[10px] font-mono text-slate-400 uppercase">{preset.color}</p>
+                    <p
+                      className="font-bold text-xs truncate"
+                      style={{ color: preset.palette.text }}
+                    >
+                      {preset.name}
+                    </p>
+                    <p
+                      className="text-[10px] font-mono uppercase"
+                      style={{ color: preset.palette.textMuted }}
+                    >
+                      {preset.color}
+                    </p>
                   </div>
                 </button>
               );
@@ -410,19 +442,80 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </div>
         </div>
 
+        {/* Accent & Background Style Row */}
+        {(onSelectAccent || onSelectBgStyle) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {onSelectAccent && (
+              <div className="p-3.5 rounded-xl theme-inset border space-y-2.5">
+                <p className="text-xs font-semibold theme-text">Màu nhấn nút & thanh điều hướng</p>
+                <div className="flex flex-wrap gap-2">
+                  {ACCENT_OPTIONS.map((acc) => {
+                    const isActive = currentAccentId === acc.id;
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => onSelectAccent(acc.id)}
+                        className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 transition-colors ${
+                          isActive ? 'theme-surface theme-text font-bold' : 'border-transparent theme-text-muted hover:theme-text'
+                        }`}
+                        style={isActive ? { borderColor: acc.hex } : undefined}
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: acc.hex }}
+                        />
+                        <span>{acc.name.split(' ')[0]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {onSelectBgStyle && (
+              <div className="p-3.5 rounded-xl theme-inset border space-y-2.5">
+                <p className="text-xs font-semibold theme-text">Hiệu ứng bề mặt nền</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'ambient' as BackgroundStyle, label: 'Ánh sáng dịu' },
+                    { id: 'solid' as BackgroundStyle, label: 'Phẳng tối giản' },
+                    { id: 'grid' as BackgroundStyle, label: 'Lưới kỹ thuật' },
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => onSelectBgStyle(st.id)}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${
+                        currentBgStyle === st.id
+                          ? 'theme-accent-bg border-transparent'
+                          : 'theme-surface-flat theme-text-secondary hover:theme-text'
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Custom Color Selector Bar */}
-        <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-3.5 rounded-xl theme-inset border flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <input
               type="color"
-              value={customColor && customColor.length === 7 ? customColor : '#020617'}
+              value={customColor && customColor.length === 7 ? customColor : '#070b14'}
               onChange={(e) => onSelectTheme && onSelectTheme('custom', e.target.value)}
-              className="w-9 h-9 rounded-xl cursor-pointer border border-slate-700 bg-transparent p-0"
-              title="Chọn màu tự do"
+              className="w-9 h-9 rounded-xl cursor-pointer border theme-border-strong bg-transparent p-0.5"
+              title="Chọn màu tự do (tối hoặc sáng)"
             />
             <div>
-              <p className="text-xs font-bold text-white">Tự chọn mã màu (Tự động đổi màu cả web)</p>
-              <p className="text-[11px] text-slate-400">Bấm vào ô màu để hòa sắc bất kỳ cho toàn bộ trang web</p>
+              <p className="text-xs font-bold theme-text">Tự chọn mã màu nền bất kỳ</p>
+              <p className="text-[11px] theme-text-muted">
+                Tự động điều chỉnh độ tương phản chữ và viền cho cả màu sáng lẫn màu tối
+              </p>
             </div>
           </div>
 
@@ -431,9 +524,9 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               <button
                 type="button"
                 onClick={onResetDefaultTheme}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+                className="px-3 py-1.5 rounded-xl theme-elevated border theme-text-secondary hover:theme-text text-xs font-semibold transition-colors"
               >
-                Mặc định (Midnight)
+                Khôi phục mặc định
               </button>
             )}
           </div>

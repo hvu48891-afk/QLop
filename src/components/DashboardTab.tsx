@@ -149,28 +149,28 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   return (
     <div className="space-y-6 pb-24 lg:pb-12">
       {/* ================= LIVE DATE & TIME STRIP ================= */}
-      <div className="p-4 sm:px-5 sm:py-4 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-4 sm:px-6 sm:py-4 rounded-2xl theme-surface border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-xl theme-accent-soft flex items-center justify-center shrink-0">
             <Calendar className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <p className="text-[11px] font-semibold uppercase tracking-wider theme-text-muted">
               Ngày tháng & Thời gian hệ thống
             </p>
-            <p className="text-sm sm:text-base font-bold text-white capitalize mt-0.5">
+            <p className="text-sm sm:text-base font-bold theme-text capitalize mt-0.5">
               {liveDateFull}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-0 border-slate-800/80">
-          <div className="flex items-baseline gap-1 px-3.5 py-2 rounded-2xl bg-slate-950 border border-slate-800">
-            <Clock className="w-4 h-4 text-orange-400 self-center mr-1.5" />
-            <span className="text-2xl sm:text-3xl font-black font-mono text-orange-400 tracking-tight tabular-nums leading-none">
+        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-0 theme-border">
+          <div className="flex items-baseline gap-1 px-3.5 py-2 rounded-xl theme-inset border">
+            <Clock className="w-4 h-4 theme-accent-text self-center mr-1.5" />
+            <span className="text-2xl sm:text-3xl font-extrabold font-mono theme-accent-text tracking-tight tabular-nums leading-none">
               {liveHourMinute}
             </span>
-            <span className="text-sm font-bold font-mono text-slate-400 tabular-nums">
+            <span className="text-sm font-bold font-mono theme-text-muted tabular-nums">
               :{liveSeconds}
             </span>
           </div>
@@ -179,7 +179,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <button
               type="button"
               onClick={onOpenTimeSyncModal}
-              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition-all active:scale-95 whitespace-nowrap"
+              className="px-3.5 py-2 rounded-xl theme-elevated border text-xs font-semibold theme-text-secondary hover:theme-text transition-colors whitespace-nowrap"
             >
               Đồng bộ giờ
             </button>
@@ -188,72 +188,80 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* ================= 1. STATS METRICS ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Card 1: Số phòng đang mở điện */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-amber-500/30 shadow-lg relative overflow-hidden">
+        <div className="p-5 rounded-2xl theme-surface border relative overflow-hidden">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
               Đang mở điện
             </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <Zap className="w-5 h-5 fill-amber-400" />
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
+              <Zap className="w-5 h-5" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-black text-white font-mono">
+            <span className="text-3xl sm:text-4xl font-extrabold theme-text font-mono tabular-nums">
               {poweredOnRooms}
             </span>
-            <span className="text-sm font-semibold text-slate-400">/ {totalRooms} phòng</span>
+            <span className="text-sm font-medium theme-text-muted tabular-nums">/ {totalRooms} phòng</span>
           </div>
-          <div className="mt-2 flex items-center justify-between text-[11px] text-amber-300">
-            <span>Tỷ lệ tải điện: {totalRooms > 0 ? Math.round((poweredOnRooms / totalRooms) * 100) : 0}%</span>
+          <div className="mt-3 space-y-1.5">
+            <div className="w-full h-1.5 rounded-full theme-inset overflow-hidden">
+              <div
+                className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                style={{ width: `${totalRooms > 0 ? Math.round((poweredOnRooms / totalRooms) * 100) : 0}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-amber-400 font-medium tabular-nums">
+              Tỷ lệ tải điện: {totalRooms > 0 ? Math.round((poweredOnRooms / totalRooms) * 100) : 0}%
+            </p>
           </div>
         </div>
 
         {/* Card 2: Số phòng trống */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-lg relative overflow-hidden">
+        <div className="p-5 rounded-2xl theme-surface border relative overflow-hidden">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
               Phòng đang trống
             </span>
-            <div className="w-9 h-9 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl theme-elevated theme-text-secondary flex items-center justify-center">
               <DoorClosed className="w-5 h-5" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-black text-white font-mono">
+            <span className="text-3xl sm:text-4xl font-extrabold theme-text font-mono tabular-nums">
               {emptyRooms}
             </span>
-            <span className="text-sm font-semibold text-slate-400">phòng</span>
+            <span className="text-sm font-medium theme-text-muted">phòng</span>
           </div>
-          <div className="mt-2 text-[11px] text-slate-400">
+          <div className="mt-3 text-[11px]">
             {emptyPoweredOnRooms > 0 ? (
-              <span className="text-amber-400 font-medium">
-                ⚠️ Có {emptyPoweredOnRooms} phòng trống còn mở điện
+              <span className="text-amber-400 font-semibold">
+                Có {emptyPoweredOnRooms} phòng trống còn mở điện
               </span>
             ) : (
-              <span className="text-emerald-400">✓ Đã tắt điện các phòng trống</span>
+              <span className="text-emerald-400 font-medium">Đã tắt điện các phòng trống</span>
             )}
           </div>
         </div>
 
         {/* Card 3: Cảnh báo khẩn cấp */}
         <div
-          className={`p-4 sm:p-5 rounded-3xl border shadow-lg relative overflow-hidden transition-all ${
+          className={`p-5 rounded-2xl border relative overflow-hidden transition-all ${
             criticalAlarmCount > 0
               ? 'bg-red-950/80 border-red-500 animate-pulse ring-2 ring-red-500/40 text-red-200'
-              : 'bg-slate-900/90 border-slate-800'
+              : 'theme-surface'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">
+            <span className="text-xs font-semibold theme-text-muted uppercase tracking-wider">
               Cảnh báo an toàn
             </span>
             <div
               className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                 criticalAlarmCount > 0
-                  ? 'bg-red-500 text-white animate-bounce'
-                  : 'bg-emerald-500/20 text-emerald-400'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-emerald-500/15 text-emerald-400'
               }`}
             >
               {criticalAlarmCount > 0 ? <Flame className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
@@ -261,49 +269,48 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </div>
           <div className="flex items-baseline gap-2">
             <span
-              className={`text-3xl sm:text-4xl font-black font-mono ${
+              className={`text-3xl sm:text-4xl font-extrabold font-mono tabular-nums ${
                 criticalAlarmCount > 0 ? 'text-red-400' : 'text-emerald-400'
               }`}
             >
               {criticalAlarmCount}
             </span>
-            <span className="text-xs text-slate-400">sự cố tức thời</span>
+            <span className="text-xs theme-text-muted">sự cố tức thời</span>
           </div>
-          <p className="mt-2 text-[11px] text-slate-400 truncate">
-            {criticalAlarmCount > 0 ? 'Phát hiện khói / quá nhiệt!' : 'Tất cả cảm biến bình thường'}
+          <p className="mt-3 text-[11px] theme-text-muted truncate">
+            {criticalAlarmCount > 0 ? 'Phát hiện khói hoặc quá nhiệt!' : 'Tất cả cảm biến bình thường'}
           </p>
         </div>
       </div>
 
       {/* ================= QUICK ACTIONS BAR ================= */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-950 p-4 rounded-3xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+      <div className="theme-surface p-4 sm:px-5 rounded-2xl border flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl theme-accent-soft flex items-center justify-center shrink-0">
             <Power className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="font-bold text-white text-sm">Hành động nhanh & Đồng bộ</h4>
-            <p className="text-xs text-slate-400">
+            <h4 className="font-bold theme-text text-sm">Hành động nhanh & Đồng bộ</h4>
+            <p className="text-xs theme-text-muted">
               Kiểm soát năng lượng và đẩy dữ liệu trực tiếp vào Supabase Database
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Button Đẩy dữ liệu vào Supabase */}
           {onPushToDatabase && (
             <button
+              type="button"
               onClick={() => onPushToDatabase()}
               disabled={isPushingDb}
               title="Đẩy dữ liệu toàn bộ phòng học, cảnh báo và lịch trình hiện tại vào Supabase"
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 disabled:opacity-50"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50 whitespace-nowrap"
             >
               <Database className={`w-3.5 h-3.5 ${isPushingDb ? 'animate-spin' : ''}`} />
               <span>{isPushingDb ? 'Đang đồng bộ...' : `Đồng bộ ${totalRooms} phòng lên DB`}</span>
             </button>
           )}
 
-          {/* Button Tắt điện toàn trường (Cầu dao tổng) */}
           {onOpenSchoolPowerModal && (
             <button
               type="button"
@@ -311,33 +318,35 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               disabled={!isAdmin}
               title={
                 isAdmin
-                  ? "Cầu dao tổng: Mở bảng điều khiển cắt/tắt điện toàn trường (Quản trị viên)"
-                  : "Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng toàn trường!"
+                  ? 'Cầu dao tổng: Mở bảng điều khiển cắt/tắt điện toàn trường (Quản trị viên)'
+                  : 'Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng toàn trường!'
               }
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                 isAdmin
-                  ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border border-red-400 text-white shadow-red-600/25 ring-2 ring-red-400/50 active:scale-95 cursor-pointer animate-pulse'
-                  : 'bg-slate-900/50 border border-slate-800 text-slate-500 opacity-40 cursor-not-allowed select-none'
+                  ? 'bg-red-600 hover:bg-red-500 border border-red-500 text-white shadow-sm cursor-pointer'
+                  : 'theme-inset border theme-text-muted opacity-50 cursor-not-allowed select-none'
               }`}
             >
-              <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-yellow-300 stroke-[2.5]' : 'text-slate-600'}`} />
+              <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-amber-200' : 'theme-text-muted'}`} />
               <span>Cầu dao tổng trường ({poweredOnRooms})</span>
-              {!isAdmin && <Lock className="w-3 h-3 text-slate-500 ml-0.5" />}
+              {!isAdmin && <Lock className="w-3 h-3 ml-0.5" />}
             </button>
           )}
 
           {emptyPoweredOnRooms > 0 && (
             <button
+              type="button"
               onClick={onTurnOffEmptyRooms}
-              className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-bold transition-all active:scale-95"
+              className="px-3.5 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/40 hover:bg-amber-500/25 text-xs font-bold transition-colors whitespace-nowrap"
             >
               Tắt điện {emptyPoweredOnRooms} phòng trống
             </button>
           )}
 
           <button
+            type="button"
             onClick={onNavigateToRooms}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl theme-elevated border theme-text text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap"
           >
             <span>Xem chi tiết các phòng</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -438,7 +447,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* ================= 2. BẢNG DỮ LIỆU CẢM BIẾN REALTIME (BẢNG sensor_data SUPABASE) ================= */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+      <div className="theme-surface border rounded-2xl p-5 space-y-4">
         {(() => {
           const latestPacket = recentSensorLogs[0];
           const latestCreatedMs = latestPacket?.created_at ? new Date(latestPacket.created_at).getTime() : 0;
@@ -451,23 +460,19 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             : null;
 
           return (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b theme-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
                   <Cpu className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-bold text-white text-base">Dữ liệu Cảm biến Realtime</h3>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-mono text-cyan-300">
-                      <Database className="w-3 h-3 text-cyan-400" />
-                      <span>bảng sensor_data</span>
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    Luồng dữ liệu vật lý từ ESP32 đồng bộ với Supabase (~3s/gói tin)
+                  <h3 className="font-bold theme-text text-base">Dữ liệu Cảm biến Realtime</h3>
+                  <p className="text-xs theme-text-muted">
+                    Luồng dữ liệu ESP32 · Bảng sensor_data
                     {latestTimeText && (
-                      <span className="text-slate-300 font-mono"> • Gói cuối: #{latestPacket?.id} ({latestTimeText} {latestDateText})</span>
+                      <span className="theme-text-secondary font-mono tabular-nums">
+                        {' '}· Gói #{latestPacket?.id} ({latestTimeText} {latestDateText})
+                      </span>
                     )}
                   </p>
                 </div>

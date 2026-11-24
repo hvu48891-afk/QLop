@@ -4,26 +4,19 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Flame, 
-  ShieldCheck, 
-  UserCheck, 
-  LogOut, 
-  Bell, 
-  ChevronDown, 
-  Radio, 
-  Sparkles,
-  Zap,
+import {
+  ShieldCheck,
+  LogOut,
+  ChevronDown,
   ZapOff,
   Clock,
-  FastForward,
   RefreshCw,
-  Database,
   Palette,
   Lock,
-  Calendar
+  Calendar,
 } from 'lucide-react';
 import { User, TabType } from '../types';
+import { themeManager } from '../utils/themeManager';
 
 interface HeaderProps {
   currentTab: TabType;
@@ -42,6 +35,7 @@ interface HeaderProps {
   poweredOnCount?: number;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
+  actualBgColor?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -52,7 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onClearAllAlarms,
   activeAlarmCount,
-  mqttStatus,
   supabaseStatus,
   timeInfo,
   onOpenTimeSyncModal,
@@ -61,6 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
   poweredOnCount = 0,
   onSyncDatabase,
   isSyncing = false,
+  actualBgColor,
 }) => {
   const [nowFallback, setNowFallback] = useState<Date>(() => new Date());
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -94,112 +88,124 @@ export const Header: React.FC<HeaderProps> = ({
   const tabTitles: Record<TabType, { title: string; subtitle: string }> = {
     dashboard: {
       title: 'Tổng quan giám sát',
-      subtitle: 'Theo dõi điện năng, trạng thái an toàn & cảnh báo thời gian thực',
+      subtitle: 'Theo dõi điện năng, an toàn PCCC và dữ liệu cảm biến thời gian thực',
     },
     rooms: {
       title: 'Danh sách phòng học',
-      subtitle: 'Giám sát và điều khiển thiết bị từng phòng (A201, 301, 302...)',
+      subtitle: 'Điều khiển nguồn điện, 4 kênh relay và theo dõi cảm biến từng phòng',
     },
     schedules: {
       title: 'Lịch sự kiện & Tự động hóa',
-      subtitle: 'Quản lý lịch sự kiện theo ngày, lịch học tuần và tự động điều khiển thiết bị',
+      subtitle: 'Quản lý lịch sự kiện theo ngày, lịch tuần và quy tắc bật/tắt tự động',
     },
     settings: {
       title: 'Cài đặt hệ thống',
-      subtitle: 'Ngưỡng cảnh báo cảm biến, phân quyền giám thị và kết nối IoT',
+      subtitle: 'Ngưỡng cảnh báo, giao diện, phân quyền tài khoản và kết nối Supabase',
     },
   };
 
+  const accentHex = themeManager.getEffectiveAccent().hex;
+  const canvasSwatch = actualBgColor || themeManager.getEffectiveBackgroundColor();
+
   return (
-    <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
-      {/* Page Title & Breadcrumb */}
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg lg:text-xl font-bold text-white tracking-tight">
+    <header className="sticky top-0 z-30 theme-header backdrop-blur-md border-b px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3 transition-colors duration-200">
+      {/* Page Title & Clean Inline Metadata */}
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h2 className="text-lg lg:text-xl font-extrabold theme-text tracking-tight truncate">
             {tabTitles[currentTab].title}
           </h2>
-          <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-900 border border-slate-700 text-slate-300">
-            <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
-            IoT Online
-          </span>
-          <span 
-            title={`Supabase URL: https://${supabaseStatus?.projectId || 'cuygczfkktprkyosabtu'}.supabase.co`}
-            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 border border-emerald-500/40 text-emerald-300"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
-            <span>
+          <div className="hidden sm:flex items-center gap-2 text-xs theme-text-muted">
+            <span aria-hidden="true">·</span>
+            <span className="text-emerald-500 font-semibold">IoT Online</span>
+            <span aria-hidden="true">·</span>
+            <span
+              title={`Supabase: https://${supabaseStatus?.projectId || 'cuygczfkktprkyosabtu'}.supabase.co`}
+              className="font-mono tabular-nums"
+            >
               {supabaseStatus?.dbRoomCount !== undefined
-                ? `DB: ${supabaseStatus.dbRoomCount} phòng`
-                : 'Supabase Kết Nối'}
+                ? `DB ${supabaseStatus.dbRoomCount} phòng`
+                : 'Supabase đã kết nối'}
             </span>
-          </span>
+          </div>
         </div>
-        <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">
+        <p className="text-xs theme-text-muted mt-0.5 hidden sm:block truncate">
           {tabTitles[currentTab].subtitle}
         </p>
       </div>
 
-      {/* Simulator Bar + Time + User dropdown */}
-      <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-        {/* Realtime Date & Clock Sync Button */}
+      {/* Right Utility Controls */}
+      <div className="flex items-center gap-2 sm:gap-2.5 ml-auto">
+        {/* Realtime Clock Button */}
         <button
+          type="button"
           onClick={onOpenTimeSyncModal}
-          title="Xem chi tiết & đồng bộ ngày giờ chuẩn NTP từ máy chủ thời gian thực"
-          className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 rounded-xl text-right transition-all group active:scale-95"
+          title="Xem chi tiết & đồng bộ ngày giờ chuẩn NTP"
+          className="flex items-center gap-2 px-3 py-1.5 theme-surface-flat hover:theme-elevated border rounded-xl text-right transition-colors whitespace-nowrap shrink-0"
         >
-          <div className="flex items-center gap-1 text-orange-400">
-            <Clock className="w-4 h-4 group-hover:scale-110 transition-transform" />
-          </div>
+          <Clock className="w-4 h-4 theme-accent-text shrink-0" />
           <div className="flex flex-col items-end">
-            <span className="text-xs sm:text-sm font-mono font-bold text-orange-400 leading-tight tabular-nums">
+            <span className="text-xs sm:text-sm font-mono font-bold theme-accent-text leading-tight tabular-nums">
               {formattedTime}
             </span>
-            <span className="text-[10px] sm:text-[11px] font-medium text-slate-300 leading-tight flex items-center gap-1 group-hover:text-orange-300 transition-colors tabular-nums">
-              <Calendar className="w-2.5 h-2.5 text-slate-400 hidden sm:inline" />
+            <span className="text-[10px] theme-text-muted leading-tight flex items-center gap-1 tabular-nums">
+              <Calendar className="w-2.5 h-2.5 hidden sm:inline" />
               <span className="hidden sm:inline">{formattedDateShort}</span>
               <span className="sm:hidden">{formattedDateCompact}</span>
             </span>
           </div>
         </button>
 
-        {/* Sync with Supabase Button */}
+        {/* Sync Database Button */}
         {onSyncDatabase && (
           <button
+            type="button"
             onClick={onSyncDatabase}
             disabled={isSyncing}
-            title="Đồng bộ dữ liệu ngay từ cơ sở dữ liệu Supabase"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+            title="Đồng bộ dữ liệu ngay từ Supabase"
+            className="flex items-center gap-1.5 px-3 py-2 theme-surface-flat hover:theme-elevated border rounded-xl text-xs font-semibold theme-text-secondary hover:theme-text transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Đồng bộ DB</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span className="hidden md:inline">Đồng bộ DB</span>
           </button>
         )}
 
-        {/* Change Entire Website Theme Color Button */}
+        {/* Rebuilt Theme / Background Switcher Trigger with Live Dual Swatch */}
         {onOpenThemeModal && (
           <button
+            type="button"
             onClick={onOpenThemeModal}
-            title="Đổi màu toàn bộ website (Navbar, Header, các thẻ phòng học và đường viền)"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-orange-500/50 text-slate-200 rounded-xl text-xs font-semibold transition-all active:scale-95 group shadow-sm"
+            title="Tùy chỉnh màu nền (Tối / Sáng / Màu tự chọn & Màu nhấn)"
+            className="flex items-center gap-2 px-3 py-2 theme-surface-flat hover:theme-elevated border rounded-xl text-xs font-semibold theme-text transition-colors whitespace-nowrap shrink-0"
           >
-            <Palette className="w-3.5 h-3.5 text-orange-400 group-hover:scale-110 transition-transform" />
-            <span className="hidden sm:inline">Đổi màu web</span>
+            <span
+              className="w-4 h-4 rounded-full border theme-border-strong flex items-center justify-center shrink-0"
+              style={{ backgroundColor: canvasSwatch }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: accentHex }}
+              />
+            </span>
+            <Palette className="w-3.5 h-3.5 theme-accent-text sm:hidden" />
+            <span className="hidden sm:inline">Đổi màu nền</span>
           </button>
         )}
 
-        {/* Active Alarms Reset Button (chỉ hiển thị khi có sự cố thực tế) */}
+        {/* Active Alarms Reset Button */}
         {activeAlarmCount > 0 && (
           <button
+            type="button"
             onClick={onClearAllAlarms}
             title="Đặt lại toàn bộ cảnh báo về trạng thái an toàn"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white border border-red-400/50 text-xs font-bold transition-all active:scale-95 animate-bounce shadow-md shadow-red-600/30"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0 shadow-sm"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-white" />
-            <span>Đặt lại cảnh báo ({activeAlarmCount})</span>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Đặt lại ({activeAlarmCount})</span>
           </button>
         )}
 
-        {/* Master School-wide Power Cut Button (Sáng khi ở Admin, các cấp quyền khác thì không nhấn được) */}
+        {/* Master School-wide Power Cut Button */}
         {onOpenSchoolPowerModal && (
           <button
             type="button"
@@ -207,29 +213,26 @@ export const Header: React.FC<HeaderProps> = ({
             disabled={!isAdmin}
             title={
               isAdmin
-                ? "Cầu dao tổng trường: Bảng điều khiển cắt điện toàn trường (Quản trị viên)"
-                : "Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng trường!"
+                ? 'Cầu dao tổng trường: Bảng điều khiển cắt điện toàn trường (Quản trị viên)'
+                : 'Chỉ Quản trị viên (Admin) mới có quyền sử dụng Cầu dao tổng trường!'
             }
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
               isAdmin
-                ? 'bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white border-red-400 shadow-lg shadow-red-600/35 ring-2 ring-red-400/60 cursor-pointer active:scale-95 animate-pulse'
-                : 'bg-slate-950/70 border-slate-800/80 text-slate-500 opacity-40 cursor-not-allowed select-none'
+                ? 'bg-red-600 hover:bg-red-500 text-white border-red-500 shadow-sm cursor-pointer'
+                : 'theme-inset border theme-text-muted opacity-50 cursor-not-allowed select-none'
             }`}
           >
-            <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-yellow-300 stroke-[2.5] drop-shadow' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">Cầu dao tổng trường</span>
+            <ZapOff className={`w-3.5 h-3.5 ${isAdmin ? 'text-amber-200' : 'theme-text-muted'}`} />
+            <span className="hidden sm:inline">Cầu dao tổng</span>
             <span className="sm:hidden">Cầu dao</span>
             {isAdmin ? (
               poweredOnCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-black/40 border border-white/30 text-[10px] font-black text-yellow-300 ml-0.5">
+                <span className="px-1.5 py-0.2 rounded-md bg-black/25 text-[10px] font-mono tabular-nums text-amber-200">
                   {poweredOnCount}
                 </span>
               )
             ) : (
-              <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono ml-0.5">
-                <Lock className="w-3 h-3 text-slate-500" />
-                <span className="hidden md:inline">(Khóa)</span>
-              </span>
+              <Lock className="w-3 h-3 ml-0.5" />
             )}
           </button>
         )}
@@ -238,84 +241,91 @@ export const Header: React.FC<HeaderProps> = ({
         {currentUser && (
           <div className="relative">
             <button
+              type="button"
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors"
+              className="flex items-center gap-2 p-1 pr-2.5 rounded-xl theme-surface-flat hover:theme-elevated border transition-colors whitespace-nowrap shrink-0"
             >
               <img
                 src={currentUser.avatar}
                 alt={currentUser.name}
-                className="w-7 h-7 rounded-lg object-cover ring-1 ring-orange-500/40"
+                referrerPolicy="no-referrer"
+                className="w-7 h-7 rounded-lg object-cover border theme-border"
               />
               <div className="text-left hidden sm:block">
-                <p className="text-xs font-semibold text-slate-200 leading-tight">
+                <p className="text-xs font-semibold theme-text leading-tight">
                   {currentUser.name.split(' ').slice(-2).join(' ')}
                 </p>
-                <p className="text-[10px] text-orange-400 font-medium leading-none">
+                <p className="text-[10px] theme-accent-text font-medium leading-none">
                   {currentUser.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
                 </p>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
+              <ChevronDown className="w-3.5 h-3.5 theme-text-muted" />
             </button>
 
-            {/* Dropdown Menu */}
             {userDropdownOpen && (
               <>
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setUserDropdownOpen(false)}
                 />
-                <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 text-xs">
-                  <div className="px-3 py-2 border-b border-slate-800/80 mb-1">
-                    <p className="font-bold text-white text-sm">{currentUser.name}</p>
-                    <p className="text-slate-400 text-[11px] truncate">{currentUser.email}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 bg-orange-500/20 text-orange-300 border border-orange-500/30 rounded-md font-semibold text-[10px]">
-                      {currentUser.role === 'admin' ? 'Quyền: Quản trị viên (Toàn quyền)' : 'Quyền: Giám thị (Điều khiển & Giám sát)'}
-                    </span>
+                <div className="absolute right-0 mt-2 w-64 theme-surface border rounded-xl shadow-2xl p-2 z-50 text-xs">
+                  <div className="px-3 py-2 border-b theme-border mb-1">
+                    <p className="font-bold theme-text text-sm">{currentUser.name}</p>
+                    <p className="theme-text-muted text-[11px] truncate">{currentUser.email}</p>
+                    <p className="mt-1 theme-accent-text font-semibold text-[11px]">
+                      {currentUser.role === 'admin' ? 'Quyền: Quản trị viên (Toàn quyền)' : 'Quyền: Giám thị'}
+                    </p>
                   </div>
 
                   {allUsers.length > 1 && (
                     <>
-                      <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                        Tài khoản Database khác:
+                      <div className="px-2 py-1 text-[10px] font-semibold theme-text-muted uppercase tracking-wider">
+                        Chuyển tài khoản
                       </div>
-
                       {allUsers.map((u) => (
                         <button
                           key={u.id}
+                          type="button"
                           onClick={() => {
                             onSwitchUser(u);
                             setUserDropdownOpen(false);
                           }}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
                             u.id === currentUser.id
-                              ? 'bg-orange-500/15 text-orange-300 font-bold'
-                              : 'text-slate-300 hover:bg-slate-800/70'
+                              ? 'theme-accent-soft font-bold'
+                              : 'theme-text-secondary hover:bg-[var(--app-surface-elevated)]'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <img src={u.avatar} alt={u.name} className="w-6 h-6 rounded-md object-cover" />
-                            <div>
-                              <p className="text-xs leading-tight">{u.name}</p>
-                              <p className="text-[10px] text-slate-400">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={u.avatar}
+                              alt={u.name}
+                              referrerPolicy="no-referrer"
+                              className="w-6 h-6 rounded-md object-cover shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-xs leading-tight truncate">{u.name}</p>
+                              <p className="text-[10px] theme-text-muted">
                                 {u.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
                               </p>
                             </div>
                           </div>
                           {u.id === currentUser.id && (
-                            <span className="text-[10px] text-orange-400 font-bold">Hiện tại</span>
+                            <span className="text-[10px] theme-accent-text font-bold shrink-0">Đang dùng</span>
                           )}
                         </button>
                       ))}
                     </>
                   )}
 
-                  <div className="border-t border-slate-800/80 mt-1 pt-1">
+                  <div className="border-t theme-border mt-1 pt-1">
                     <button
+                      type="button"
                       onClick={() => {
                         setUserDropdownOpen(false);
                         onLogout();
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-red-400 hover:bg-red-500/10 font-medium transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-500 hover:bg-red-500/10 font-semibold transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Đăng xuất</span>

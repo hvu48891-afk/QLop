@@ -4,17 +4,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  DoorOpen, 
-  CalendarClock, 
-  Settings, 
-  Cpu, 
-  ShieldAlert, 
+import {
+  LayoutDashboard,
+  DoorOpen,
+  CalendarClock,
+  Settings,
+  Cpu,
   Flame,
   Radio,
   Calendar,
-  Clock
+  Clock,
 } from 'lucide-react';
 import { TabType, User } from '../types';
 
@@ -54,6 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     month: '2-digit',
     year: 'numeric',
   });
+
   const navItems = [
     {
       id: 'dashboard' as TabType,
@@ -66,7 +66,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: 'Lớp học',
       icon: DoorOpen,
       badge: activeAlarmCount > 0 ? 'Báo động' : null,
-      badgeColor: 'bg-red-500 animate-pulse',
     },
     {
       id: 'schedules' as TabType,
@@ -83,24 +82,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       {/* ================= DESKTOP SIDEBAR ================= */}
-      <aside className="hidden lg:flex flex-col w-72 bg-slate-950 border-r border-slate-800/80 p-5 select-none shrink-0">
-        {/* Brand & Logo */}
-        <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-slate-800/60 pb-5">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-orange-500/25 ring-2 ring-orange-400/20">
-            <Cpu className="w-6 h-6 text-slate-950 stroke-[2.5]" />
+      <aside className="hidden lg:flex flex-col w-64 theme-sidebar border-r p-4 select-none shrink-0 transition-colors duration-200">
+        {/* Brand Wordmark */}
+        <div className="flex items-center gap-3 px-2 py-2.5 mb-5 border-b theme-border pb-4">
+          <div className="w-10 h-10 rounded-xl theme-accent-bg flex items-center justify-center shadow-sm shrink-0">
+            <Cpu className="w-5 h-5 stroke-[2.4]" />
           </div>
-          <div>
-            <h1 className="font-bold text-white text-base tracking-tight leading-tight flex items-center gap-1.5">
+          <div className="min-w-0">
+            <h1 className="font-extrabold theme-text text-[15px] tracking-tight leading-tight truncate">
               Smart Classroom
             </h1>
-            <p className="text-xs text-slate-400 font-medium">Quản lý phòng học thông minh</p>
+            <p className="text-[11px] theme-text-muted font-medium truncate">
+              Quản lý phòng học IoT
+            </p>
           </div>
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 space-y-1.5">
-          <div className="px-3 pb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Menu Quản Trị
+        <nav className="flex-1 space-y-1">
+          <div className="px-3 pb-1.5 text-[11px] font-semibold theme-text-muted tracking-wide">
+            Điều hướng
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -108,30 +109,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl font-medium text-sm transition-all duration-200 text-left ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-semibold text-sm transition-colors duration-150 text-left whitespace-nowrap ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-500/20 to-amber-500/10 text-orange-400 border border-orange-500/30 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                    ? 'theme-accent-soft border border-[var(--app-accent)]/30'
+                    : 'theme-text-muted hover:theme-text hover:bg-[var(--app-surface-elevated)]'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                      isActive ? 'bg-orange-500 text-slate-950' : 'bg-slate-900 text-slate-400'
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                      isActive ? 'theme-accent-bg' : 'theme-inset theme-text-muted'
                     }`}
                   >
                     <Icon className="w-4 h-4 stroke-[2.2]" />
                   </div>
-                  <span>{item.label}</span>
+                  <span className={isActive ? 'theme-text font-bold' : ''}>{item.label}</span>
                 </div>
 
                 {item.badge && (
-                  <span
-                    className={`text-[11px] px-2 py-0.5 rounded-full font-bold text-white ${
-                      item.badgeColor || 'bg-red-500 text-white'
-                    }`}
-                  >
+                  <span className="text-[11px] px-2 py-0.5 rounded-md font-bold bg-red-600 text-white shrink-0">
                     {item.badge}
                   </span>
                 )}
@@ -140,67 +138,62 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Fire alarm callout if any active */}
+        {/* Fire alarm callout if active */}
         {activeAlarmCount > 0 && (
-          <div className="mb-4 p-3 rounded-2xl bg-red-950/60 border border-red-500/50 animate-pulse text-red-200 text-xs">
-            <div className="flex items-center gap-2 font-bold text-red-400 mb-1">
-              <Flame className="w-4 h-4 text-red-500 animate-bounce" />
-              <span>CẢNH BÁO KHẨN CẤP</span>
+          <div className="mb-3 p-3 rounded-xl bg-red-500/15 border border-red-500/50 text-xs">
+            <div className="flex items-center gap-2 font-bold text-red-500 mb-1">
+              <Flame className="w-4 h-4 animate-bounce" />
+              <span>Cảnh báo khẩn cấp</span>
             </div>
-            <p className="text-[11px] text-slate-300">
-              Có <strong className="text-red-400 font-bold">{activeAlarmCount}</strong> phòng đang phát tín hiệu khói / nhiệt cao!
+            <p className="text-[11px] theme-text-secondary">
+              Có <strong className="text-red-500 font-bold">{activeAlarmCount}</strong> phòng đang báo khói hoặc quá nhiệt.
             </p>
           </div>
         )}
 
         {/* Live Date & Time Sidebar Card */}
-        <div className="mb-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+        <div className="mb-3 p-3 rounded-xl theme-inset border space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-orange-400" />
-              Giờ hiện tại
+            <span className="text-[11px] font-medium theme-text-muted flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 theme-accent-text" />
+              Giờ hệ thống
             </span>
-            <span className="text-sm font-mono font-bold text-orange-400 tabular-nums">
+            <span className="text-sm font-mono font-bold theme-accent-text tabular-nums">
               {sidebarTime}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-300 font-medium capitalize">
-            <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+          <div className="flex items-center gap-1.5 text-[11px] theme-text-secondary font-medium capitalize">
+            <Calendar className="w-3.5 h-3.5 theme-text-muted shrink-0" />
             <span className="truncate">{sidebarDate}</span>
           </div>
         </div>
 
-        {/* MQTT Status Indicator Footer */}
-        <div className="mt-auto pt-4 border-t border-slate-800/80">
-          <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
-              <div>
-                <p className="font-semibold text-slate-200 text-[11px]">IoT Core Broker</p>
-                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <Radio className="w-2.5 h-2.5 text-emerald-400" />
-                  Độ trễ: {mqttStatus.latency}ms
+        {/* MQTT Status & User Footer */}
+        <div className="mt-auto pt-3 border-t theme-border space-y-3">
+          <div className="p-2.5 rounded-xl theme-inset border flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Radio className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-semibold theme-text text-[11px] truncate">IoT Core Broker</p>
+                <p className="text-[10px] theme-text-muted font-mono tabular-nums">
+                  Độ trễ {mqttStatus.latency}ms
                 </p>
               </div>
             </div>
-            <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md font-semibold">
-              Live
-            </span>
+            <span className="text-[10px] font-semibold text-emerald-500 shrink-0">Live</span>
           </div>
 
           {currentUser && (
-            <div className="mt-3 flex items-center gap-2.5 px-2 py-1">
+            <div className="flex items-center gap-2.5 px-1.5 py-0.5">
               <img
                 src={currentUser.avatar}
                 alt={currentUser.name}
-                className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-700"
+                referrerPolicy="no-referrer"
+                className="w-8 h-8 rounded-full object-cover border theme-border shrink-0"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-200 truncate">{currentUser.name}</p>
-                <p className="text-[10px] text-orange-400 font-medium">
+                <p className="text-xs font-semibold theme-text truncate">{currentUser.name}</p>
+                <p className="text-[11px] theme-accent-text font-medium truncate">
                   {currentUser.role === 'admin' ? 'Quản trị viên' : 'Giám thị'}
                 </p>
               </div>
@@ -210,7 +203,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </aside>
 
       {/* ================= MOBILE BOTTOM NAVIGATION ================= */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-2 py-1.5">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 theme-header backdrop-blur-md border-t px-2 py-1.5">
         <div className="flex items-center justify-around">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -218,29 +211,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => onTabChange(item.id)}
-                className={`relative flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all ${
-                  isActive ? 'text-orange-400' : 'text-slate-400 hover:text-slate-200'
+                className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-colors ${
+                  isActive ? 'theme-accent-text' : 'theme-text-muted hover:theme-text'
                 }`}
               >
                 <div className="relative">
-                  <Icon
-                    className={`w-5 h-5 transition-transform ${
-                      isActive ? 'scale-110 stroke-[2.4] text-orange-400' : 'stroke-[2]'
-                    }`}
-                  />
+                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.4]' : 'stroke-[1.9]'}`} />
                   {item.badge && (
-                    <span className="absolute -top-1.5 -right-2.5 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center animate-pulse">
+                    <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
                       !
                     </span>
                   )}
                 </div>
-                <span className={`text-[10px] mt-1 font-medium ${isActive ? 'font-bold' : ''}`}>
+                <span className={`text-[10px] mt-1 ${isActive ? 'font-bold' : 'font-medium'}`}>
                   {item.label}
                 </span>
-                {isActive && (
-                  <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-0.5"></span>
-                )}
               </button>
             );
           })}
