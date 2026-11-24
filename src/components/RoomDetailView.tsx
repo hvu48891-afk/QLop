@@ -103,11 +103,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
     });
   };
 
-  // RELAY 3: ĐÈN CHIẾU SÁNG (light_on / relay3_dieuhoa)
+  // RELAY 2: ĐÈN CHIẾU SÁNG (light_on / relay2_den)
   const handleToggleLight = () => {
     if (isMasterPowerCut) return;
     if (onToggleRelay) {
-      onToggleRelay(room.code || room.id, 'relay3_dieuhoa');
+      onToggleRelay(room.code || room.id, 'relay2_den');
       return;
     }
     const newState = !room.devices.light.isOn;
@@ -125,11 +125,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
     });
   };
 
-  // RELAY 2: ĐIỀU HÒA (ac_on / relay2_den)
+  // RELAY 3: ĐIỀU HÒA (ac_on / relay3_dieuhoa)
   const handleToggleAc = () => {
     if (isMasterPowerCut) return;
     if (onToggleRelay) {
-      onToggleRelay(room.code || room.id, 'relay2_den');
+      onToggleRelay(room.code || room.id, 'relay3_dieuhoa');
       return;
     }
     const newState = !room.devices.ac.isOn;
@@ -146,11 +146,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
     });
   };
 
-  // RELAY 4: MÁY CHIẾU (projector_on / relay4_quat)
+  // RELAY 1: MÁY CHIẾU (projector_on / relay1_maychieu)
   const handleToggleProjector = () => {
     if (isMasterPowerCut) return;
     if (onToggleRelay) {
-      onToggleRelay(room.code || room.id, 'relay4_quat');
+      onToggleRelay(room.code || room.id, 'relay1_maychieu');
       return;
     }
     const newState = !room.devices.projector.isOn;
@@ -167,11 +167,11 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
     });
   };
 
-  // RELAY 1: QUẠT THÔNG GIÓ (fan_on / relay1_maychieu)
+  // RELAY 4: QUẠT THÔNG GIÓ (fan_on / relay4_quat)
   const handleToggleFan = () => {
     if (isMasterPowerCut) return;
     if (onToggleRelay) {
-      onToggleRelay(room.code || room.id, 'relay1_maychieu');
+      onToggleRelay(room.code || room.id, 'relay4_quat');
       return;
     }
     const newState = !room.devices.fan.isOn;
@@ -739,7 +739,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                   CẦU DAO TỔNG ĐANG NGẮT ĐIỆN — ĐÃ KHÓA CẢ 4 RELAY
                 </p>
                 <p className="text-[11px] text-red-200/80 mt-0.5">
-                  Không cho phép kích hoạt Relay 1–4 (Quạt, Điều hòa, Đèn, Máy chiếu) khi cầu dao đang ngắt nguồn. Bấm &ldquo;ĐÓNG ĐIỆN PHÒNG&rdquo; để cấp nguồn trở lại.
+                  Không cho phép kích hoạt Relay 1–4 (Máy chiếu, Đèn, Điều hòa, Quạt) khi cầu dao đang ngắt nguồn. Bấm &ldquo;ĐÓNG ĐIỆN PHÒNG&rdquo; để cấp nguồn trở lại.
                 </p>
               </div>
             </div>
@@ -755,166 +755,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
 
         {/* 6 Relay Cards (Relay 1 to 4 + Master Power) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 relative z-10">
-          {/* 1. RELAY 1: QUẠT THÔNG GIÓ */}
-          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-            room.devices.fan.isOn
-              ? 'bg-emerald-950/30 border-emerald-500/60 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30'
-              : 'bg-slate-950/70 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold uppercase tracking-wider">
-                  KÊNH 1 (R1)
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3 my-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                  room.devices.fan.isOn
-                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
-                    : 'bg-slate-800 text-slate-500'
-                }`}>
-                  <Fan className={`w-5 h-5 stroke-[2.2] ${room.devices.fan.isOn ? 'animate-spin' : ''}`} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-sm">Quạt Thông Gió</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${room.devices.fan.isOn ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`} />
-                    <span>{room.devices.fan.isOn ? 'Lệnh: Đang BẬT (ON)' : 'Lệnh: Đang TẮT (OFF)'}</span>
-                  </p>
-                  {room.relayControl?.state_relay1_maychieu !== undefined && (
-                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
-                      ESP32 thực tế:{' '}
-                      <span className={room.relayControl.state_relay1_maychieu ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                        {room.relayControl.state_relay1_maychieu ? 'Đang BẬT' : 'Đang TẮT'}
-                      </span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleToggleFan}
-              disabled={isMasterPowerCut}
-              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                room.devices.fan.isOn
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            >
-              <Power className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>{room.devices.fan.isOn ? 'TẮT RELAY 1' : 'BẬT RELAY 1'}</span>
-            </button>
-          </div>
-
-          {/* 2. RELAY 2: ĐIỀU HÒA KHÔNG KHÍ */}
-          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-            room.devices.ac.isOn
-              ? 'bg-cyan-950/30 border-cyan-500/60 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/30'
-              : 'bg-slate-950/70 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold uppercase tracking-wider">
-                  KÊNH 2 (R2)
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3 my-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                  room.devices.ac.isOn
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
-                    : 'bg-slate-800 text-slate-500'
-                }`}>
-                  <Wind className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-sm">Điều Hòa Không Khí</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${room.devices.ac.isOn ? 'bg-cyan-400 animate-ping' : 'bg-slate-600'}`} />
-                    <span>{room.devices.ac.isOn ? `Lệnh: Đang BẬT (${room.devices.ac.targetTemp}°C)` : 'Lệnh: Đang TẮT (OFF)'}</span>
-                  </p>
-                  {room.relayControl?.state_relay2_den !== undefined && (
-                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
-                      ESP32 thực tế:{' '}
-                      <span className={room.relayControl.state_relay2_den ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                        {room.relayControl.state_relay2_den ? 'Đang BẬT' : 'Đang TẮT'}
-                      </span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleToggleAc}
-              disabled={isMasterPowerCut}
-              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                room.devices.ac.isOn
-                  ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            >
-              <Power className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>{room.devices.ac.isOn ? 'TẮT RELAY 2' : 'BẬT RELAY 2'}</span>
-            </button>
-          </div>
-
-          {/* 3. RELAY 3: ĐÈN CHIẾU SÁNG */}
-          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-            room.devices.light.isOn
-              ? 'bg-amber-950/30 border-amber-500/60 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30'
-              : 'bg-slate-950/70 border-slate-800'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold uppercase tracking-wider">
-                  KÊNH 3 (R3)
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3 my-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                  room.devices.light.isOn
-                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
-                    : 'bg-slate-800 text-slate-500'
-                }`}>
-                  <Lightbulb className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-sm">Đèn Chiếu Sáng</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${room.devices.light.isOn ? 'bg-amber-400 animate-ping' : 'bg-slate-600'}`} />
-                    <span>{room.devices.light.isOn ? 'Lệnh: Đang BẬT (ON)' : 'Lệnh: Đang TẮT (OFF)'}</span>
-                  </p>
-                  {room.relayControl?.state_relay3_dieuhoa !== undefined && (
-                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
-                      ESP32 thực tế:{' '}
-                      <span className={room.relayControl.state_relay3_dieuhoa ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                        {room.relayControl.state_relay3_dieuhoa ? 'Đang BẬT' : 'Đang TẮT'}
-                      </span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleToggleLight}
-              disabled={isMasterPowerCut}
-              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                room.devices.light.isOn
-                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            >
-              <Power className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>{room.devices.light.isOn ? 'TẮT RELAY 3' : 'BẬT RELAY 3'}</span>
-            </button>
-          </div>
-
-          {/* 4. RELAY 4: MÁY CHIẾU */}
+          {/* 1. RELAY 1: MÁY CHIẾU */}
           <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
             room.devices.projector.isOn
               ? 'bg-purple-950/30 border-purple-500/60 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500/30'
@@ -923,7 +764,7 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold uppercase tracking-wider">
-                  KÊNH 4 (R4)
+                  KÊNH 1 (R1)
                 </span>
               </div>
 
@@ -939,13 +780,13 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
                   <h4 className="font-bold text-white text-sm">Máy Chiếu Lớp Học</h4>
                   <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${room.devices.projector.isOn ? 'bg-purple-400 animate-ping' : 'bg-slate-600'}`} />
-                    <span>{room.devices.projector.isOn ? 'Lệnh: Đang BẬT (ON)' : 'Lệnh: Đang TẮT (OFF)'}</span>
+                    <span>{room.devices.projector.isOn ? 'Trạng thái: Đang BẬT (ON)' : 'Trạng thái: Đang TẮT (OFF)'}</span>
                   </p>
-                  {room.relayControl?.state_relay4_quat !== undefined && (
+                  {room.relayControl?.state_relay1_maychieu !== undefined && (
                     <p className="text-[10px] font-mono text-slate-400 mt-0.5">
                       ESP32 thực tế:{' '}
-                      <span className={room.relayControl.state_relay4_quat ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                        {room.relayControl.state_relay4_quat ? 'Đang BẬT' : 'Đang TẮT'}
+                      <span className={room.relayControl.state_relay1_maychieu ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                        {room.relayControl.state_relay1_maychieu ? 'Đang BẬT' : 'Đang TẮT'}
                       </span>
                     </p>
                   )}
@@ -963,7 +804,166 @@ export const RoomDetailView: React.FC<RoomDetailViewProps> = ({
               } disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               <Power className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>{room.devices.projector.isOn ? 'TẮT RELAY 4' : 'BẬT RELAY 4'}</span>
+              <span>{room.devices.projector.isOn ? 'TẮT RELAY 1' : 'BẬT RELAY 1'}</span>
+            </button>
+          </div>
+
+          {/* 2. RELAY 2: ĐÈN CHIẾU SÁNG */}
+          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+            room.devices.light.isOn
+              ? 'bg-amber-950/30 border-amber-500/60 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30'
+              : 'bg-slate-950/70 border-slate-800'
+          }`}>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold uppercase tracking-wider">
+                  KÊNH 2 (R2)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 my-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                  room.devices.light.isOn
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
+                    : 'bg-slate-800 text-slate-500'
+                }`}>
+                  <Lightbulb className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">Đèn Chiếu Sáng</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${room.devices.light.isOn ? 'bg-amber-400 animate-ping' : 'bg-slate-600'}`} />
+                    <span>{room.devices.light.isOn ? 'Trạng thái: Đang BẬT (ON)' : 'Trạng thái: Đang TẮT (OFF)'}</span>
+                  </p>
+                  {room.relayControl?.state_relay2_den !== undefined && (
+                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
+                      ESP32 thực tế:{' '}
+                      <span className={room.relayControl.state_relay2_den ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                        {room.relayControl.state_relay2_den ? 'Đang BẬT' : 'Đang TẮT'}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleToggleLight}
+              disabled={isMasterPowerCut}
+              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                room.devices.light.isOn
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <Power className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{room.devices.light.isOn ? 'TẮT RELAY 2' : 'BẬT RELAY 2'}</span>
+            </button>
+          </div>
+
+          {/* 3. RELAY 3: ĐIỀU HÒA KHÔNG KHÍ */}
+          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+            room.devices.ac.isOn
+              ? 'bg-cyan-950/30 border-cyan-500/60 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/30'
+              : 'bg-slate-950/70 border-slate-800'
+          }`}>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold uppercase tracking-wider">
+                  KÊNH 3 (R3)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 my-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                  room.devices.ac.isOn
+                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
+                    : 'bg-slate-800 text-slate-500'
+                }`}>
+                  <Wind className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">Điều Hòa Không Khí</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${room.devices.ac.isOn ? 'bg-cyan-400 animate-ping' : 'bg-slate-600'}`} />
+                    <span>{room.devices.ac.isOn ? `Trạng thái: Đang BẬT (${room.devices.ac.targetTemp}°C)` : 'Trạng thái: Đang TẮT (OFF)'}</span>
+                  </p>
+                  {room.relayControl?.state_relay3_dieuhoa !== undefined && (
+                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
+                      ESP32 thực tế:{' '}
+                      <span className={room.relayControl.state_relay3_dieuhoa ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                        {room.relayControl.state_relay3_dieuhoa ? 'Đang BẬT' : 'Đang TẮT'}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleToggleAc}
+              disabled={isMasterPowerCut}
+              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                room.devices.ac.isOn
+                  ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <Power className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{room.devices.ac.isOn ? 'TẮT RELAY 3' : 'BẬT RELAY 3'}</span>
+            </button>
+          </div>
+
+          {/* 4. RELAY 4: QUẠT THÔNG GIÓ */}
+          <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+            room.devices.fan.isOn
+              ? 'bg-emerald-950/30 border-emerald-500/60 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30'
+              : 'bg-slate-950/70 border-slate-800'
+          }`}>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold uppercase tracking-wider">
+                  KÊNH 4 (R4)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 my-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                  room.devices.fan.isOn
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
+                    : 'bg-slate-800 text-slate-500'
+                }`}>
+                  <Fan className={`w-5 h-5 stroke-[2.2] ${room.devices.fan.isOn ? 'animate-spin' : ''}`} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">Quạt Thông Gió</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${room.devices.fan.isOn ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`} />
+                    <span>{room.devices.fan.isOn ? 'Trạng thái: Đang BẬT (ON)' : 'Trạng thái: Đang TẮT (OFF)'}</span>
+                  </p>
+                  {room.relayControl?.state_relay4_quat !== undefined && (
+                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">
+                      ESP32 thực tế:{' '}
+                      <span className={room.relayControl.state_relay4_quat ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                        {room.relayControl.state_relay4_quat ? 'Đang BẬT' : 'Đang TẮT'}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleToggleFan}
+              disabled={isMasterPowerCut}
+              className={`w-full mt-3 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                room.devices.fan.isOn
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <Power className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{room.devices.fan.isOn ? 'TẮT RELAY 4' : 'BẬT RELAY 4'}</span>
             </button>
           </div>
 

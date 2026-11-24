@@ -114,6 +114,8 @@ class SupabaseService {
 
   private writeListeners: Array<(event: WriteEvent) => void> = [];
   private knownRoomsMap: Map<string, Room> = new Map();
+  private pendingRelayOverrides: Map<string, { targetState: boolean; expiresAt: number }> = new Map();
+  private pendingPowerOverrides: Map<string, { targetState: boolean; expiresAt: number }> = new Map();
   public lastFetchOk = {
     rooms: true,
     relayControls: true,
@@ -123,6 +125,75 @@ class SupabaseService {
     settings: true,
     profiles: true,
   };
+
+  public setPendingRelayOverride(
+    roomCode: string,
+    relayType: RelayType | 'relay1_maychieu' | 'relay2_den' | 'relay3_dieuhoa' | 'relay4_quat',
+    targetState: boolean,
+    ttlMs: number = 8000
+  ) {
+    const expiresAt = Date.now() + ttlMs;
+    if (
+      relayType === 'relay1_maychieu' ||
+      relayType === 'relay2_den' ||
+      relayType === 'relay3_dieuhoa' ||
+      relayType === 'relay4_quat'
+    ) {
+      this.pendingRelayOverrides.set(`${roomCode}:${relayType}`, { targetState, expiresAt });
+    } else if (relayType === 'power_on') {
+      this.setPendingPowerOverride(roomCode, targetState, ttlMs);
+    }
+  }
+
+  public setPendingPowerOverride(roomCode: string, targetState: boolean, ttlMs: number = 8000) {
+    const expiresAt = Date.now() + ttlMs;
+    this.pendingPowerOverrides.set(roomCode, { targetState, expiresAt });
+    if (!targetState) {
+      this.pendingRelayOverrides.set(`${roomCode}:relay1_maychieu`, { targetState: false, expiresAt });
+      this.pendingRelayOverrides.set(`${roomCode}:relay2_den`, { targetState: false, expiresAt });
+      this.pendingRelayOverrides.set(`${roomCode}:relay3_dieuhoa`, { targetState: false, expiresAt });
+      this.pendingRelayOverrides.set(`${roomCode}:relay4_quat`, { targetState: false, expiresAt });
+    }
+  }
+
+  private resolveEffectiveRelayState(
+    roomCode: string,
+    relayKey: 'relay1_maychieu' | 'relay2_den' | 'relay3_dieuhoa' | 'relay4_quat',
+    cmdState: boolean,
+    actualState: boolean | undefined | null,
+    cmdUpdatedAt?: string,
+    stateUpdatedAt?: string
+  ): boolean {
+    const overrideKey = `${roomCode}:${relayKey}`;
+    const pending = this.pendingRelayOverrides.get(overrideKey);
+    const hasActual = actualState !== undefined && actualState !== null;
+
+    if (pending) {
+      if (Date.now() > pending.expiresAt) {
+        this.pendingRelayOverrides.delete(overrideKey);
+      } else if (hasActual && Boolean(actualState) === pending.targetState) {
+        this.pendingRelayOverrides.delete(overrideKey);
+      } else {
+        return pending.targetState;
+      }
+    }
+
+    // Khi trạng thái thực tế trên phần cứng (ESP32) đang BẬT -> trên web cũng BẬT
+    if (hasActual && Boolean(actualState)) {
+      return true;
+    }
+
+    // Nếu thực tế đang TẮT nhưng lệnh web đang BẬT, kiểm tra xem phần cứng có vừa báo tắt sau lệnh hay không
+    if (hasActual && !actualState && cmdState && cmdUpdatedAt && stateUpdatedAt) {
+      const cmdMs = new Date(cmdUpdatedAt).getTime();
+      const stateMs = new Date(stateUpdatedAt).getTime();
+      if (!isNaN(cmdMs) && !isNaN(stateMs) && stateMs - cmdMs > 2000) {
+        return false;
+      }
+    }
+
+    return Boolean(cmdState);
+  }
 
   public subscribeWriteEvents(callback: (event: WriteEvent) => void): () => void {
     this.writeListeners.push(callback);
@@ -603,42 +674,111 @@ class SupabaseService {
    * Gắn dữ liệu từ bảng relay_control vào Room trên giao diện
    */
   public mergeRelayControlToRoom(room: Room, rc: DbRelayControl): Room {
-    const isMasterCut = !room.isPowerOn || room.emergencyPowerCut;
-    const effectiveRc: DbRelayControl = isMasterCut
-      ? {
-          ...rc,
-          relay1_maychieu: false,
-          relay2_den: false,
-          relay3_dieuhoa: false,
-          relay4_quat: false,
-          auto_mode: false,
-        }
-      : rc;
+    const roomCode = room.code || room.id;
+    const pendingPower = this.pendingPowerOverrides.get(roomCode);
+    let effectivePowerOn = room.isPowerOn;
+
+    if (pendingPower) {
+      if (Date.now() > pendingPower.expiresAt) {
+        this.pendingPowerOverrides.delete(roomCode);
+      } else {
+        effectivePowerOn = pendingPower.targetState;
+      }
+    }
+
+    const anyActualHardwareOn = Boolean(
+      rc.state_relay1_maychieu ||
+        rc.state_relay2_den ||
+        rc.state_relay3_dieuhoa ||
+        rc.state_relay4_quat
+    );
+
+    if (
+      !room.emergencyPowerCut &&
+      !(pendingPower && !pendingPower.targetState) &&
+      anyActualHardwareOn
+    ) {
+      effectivePowerOn = true;
+    }
+
+    const isMasterCut = !effectivePowerOn || room.emergencyPowerCut;
+
+    const r1On = isMasterCut
+      ? false
+      : this.resolveEffectiveRelayState(
+          roomCode,
+          'relay1_maychieu',
+          Boolean(rc.relay1_maychieu),
+          rc.state_relay1_maychieu,
+          rc.updated_at,
+          rc.state_updated_at
+        );
+    const r2On = isMasterCut
+      ? false
+      : this.resolveEffectiveRelayState(
+          roomCode,
+          'relay2_den',
+          Boolean(rc.relay2_den),
+          rc.state_relay2_den,
+          rc.updated_at,
+          rc.state_updated_at
+        );
+    const r3On = isMasterCut
+      ? false
+      : this.resolveEffectiveRelayState(
+          roomCode,
+          'relay3_dieuhoa',
+          Boolean(rc.relay3_dieuhoa),
+          rc.state_relay3_dieuhoa,
+          rc.updated_at,
+          rc.state_updated_at
+        );
+    const r4On = isMasterCut
+      ? false
+      : this.resolveEffectiveRelayState(
+          roomCode,
+          'relay4_quat',
+          Boolean(rc.relay4_quat),
+          rc.state_relay4_quat,
+          rc.updated_at,
+          rc.state_updated_at
+        );
+
+    const effectiveRc: DbRelayControl = {
+      ...rc,
+      relay1_maychieu: r1On,
+      relay2_den: r2On,
+      relay3_dieuhoa: r3On,
+      relay4_quat: r4On,
+      auto_mode: isMasterCut ? false : rc.auto_mode,
+    };
 
     return {
       ...room,
+      isPowerOn: effectivePowerOn,
+      status: room.hasFireAlarm ? 'alert' : effectivePowerOn ? 'on' : 'off',
       relayControl: effectiveRc,
       relayAlarm: Boolean(rc.khan_cap),
       devices: {
         ...room.devices,
-        fan: {
-          ...room.devices.fan,
-          isOn: Boolean(effectiveRc.relay1_maychieu),
-          speed: effectiveRc.relay1_maychieu ? (room.devices.fan.speed || 2) : 0,
-        },
-        ac: {
-          ...room.devices.ac,
-          isOn: Boolean(effectiveRc.relay2_den),
+        projector: {
+          ...room.devices.projector,
+          isOn: r1On,
         },
         light: {
           ...room.devices.light,
-          isOn: Boolean(effectiveRc.relay3_dieuhoa),
-          brightness: effectiveRc.relay3_dieuhoa ? (room.devices.light.brightness || 85) : 0,
-          preset: effectiveRc.relay3_dieuhoa ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
+          isOn: r2On,
+          brightness: r2On ? (room.devices.light.brightness || 85) : 0,
+          preset: r2On ? (room.devices.light.preset === 'off' ? 'study' : room.devices.light.preset) : 'off',
         },
-        projector: {
-          ...room.devices.projector,
-          isOn: Boolean(effectiveRc.relay4_quat),
+        ac: {
+          ...room.devices.ac,
+          isOn: r3On,
+        },
+        fan: {
+          ...room.devices.fan,
+          isOn: r4On,
+          speed: r4On ? (room.devices.fan.speed || 2) : 0,
         },
       },
     };
@@ -652,6 +792,19 @@ class SupabaseService {
     fields: Partial<DbRelayControl>
   ): Promise<{ success: boolean; row: DbRelayControl | null; error?: string }> {
     try {
+      if (fields.relay1_maychieu !== undefined) {
+        this.setPendingRelayOverride(code, 'relay1_maychieu', Boolean(fields.relay1_maychieu));
+      }
+      if (fields.relay2_den !== undefined) {
+        this.setPendingRelayOverride(code, 'relay2_den', Boolean(fields.relay2_den));
+      }
+      if (fields.relay3_dieuhoa !== undefined) {
+        this.setPendingRelayOverride(code, 'relay3_dieuhoa', Boolean(fields.relay3_dieuhoa));
+      }
+      if (fields.relay4_quat !== undefined) {
+        this.setPendingRelayOverride(code, 'relay4_quat', Boolean(fields.relay4_quat));
+      }
+
       const payload = {
         ...fields,
         updated_at: new Date().toISOString(),
@@ -790,10 +943,10 @@ class SupabaseService {
     state: boolean
   ): Promise<{ roomUpdated: boolean; relayControlRow: DbRelayControl | null }> {
     const roomPayloadMap: Record<string, Partial<DbRoom> | null> = {
-      relay1_maychieu: { fan_on: state },
-      relay2_den: { ac_on: state },
-      relay3_dieuhoa: { light_on: state, light_mode: state ? 'study' : 'off' },
-      relay4_quat: { projector_on: state },
+      relay1_maychieu: { projector_on: state },
+      relay2_den: { light_on: state, light_mode: state ? 'study' : 'off' },
+      relay3_dieuhoa: { ac_on: state },
+      relay4_quat: { fan_on: state },
       relay_alarm: { relay_alarm: state },
       khan_cap: { relay_alarm: state },
       auto_mode: null,
@@ -910,10 +1063,10 @@ class SupabaseService {
         const code = r.code || r.id;
         await this.updateRelayControl(code, {
           auto_mode: r.relayControl?.auto_mode ?? false,
-          relay1_maychieu: r.devices.fan.isOn,
-          relay2_den: r.devices.ac.isOn,
-          relay3_dieuhoa: r.devices.light.isOn,
-          relay4_quat: r.devices.projector.isOn,
+          relay1_maychieu: r.devices.projector.isOn,
+          relay2_den: r.devices.light.isOn,
+          relay3_dieuhoa: r.devices.ac.isOn,
+          relay4_quat: r.devices.fan.isOn,
           khan_cap: r.relayAlarm,
         });
       }
@@ -1092,42 +1245,42 @@ class SupabaseService {
   }
 
   /**
-   * Cập nhật điều khiển Đèn (Relay 3): light_on, light_mode (cả rooms và relay_control)
+   * Cập nhật điều khiển Đèn (Relay 2): light_on, light_mode (cả rooms và relay_control)
    */
   public async updateLight(code: string, light_on: boolean, light_mode?: LightPreset): Promise<boolean> {
     const payload: Partial<DbRoom> = { light_on };
     if (light_mode) payload.light_mode = light_mode;
-    const rcRes = await this.updateRelayControl(code, { relay3_dieuhoa: light_on, auto_mode: false });
+    const rcRes = await this.updateRelayControl(code, { relay2_den: light_on, auto_mode: false });
     const roomOk = await this.updateRoom(code, payload);
     return rcRes.success && roomOk;
   }
 
   /**
-   * Cập nhật điều khiển Điều hòa (Relay 2): ac_on, ac_temp, ac_mode (cả rooms và relay_control)
+   * Cập nhật điều khiển Điều hòa (Relay 3): ac_on, ac_temp, ac_mode (cả rooms và relay_control)
    */
   public async updateAc(code: string, ac_on: boolean, ac_temp?: number, ac_mode?: AcMode): Promise<boolean> {
     const payload: Partial<DbRoom> = { ac_on };
     if (ac_temp !== undefined) payload.ac_temp = ac_temp;
     if (ac_mode) payload.ac_mode = ac_mode;
-    const rcRes = await this.updateRelayControl(code, { relay2_den: ac_on, auto_mode: false });
+    const rcRes = await this.updateRelayControl(code, { relay3_dieuhoa: ac_on, auto_mode: false });
     const roomOk = await this.updateRoom(code, payload);
     return rcRes.success && roomOk;
   }
 
   /**
-   * Cập nhật điều khiển Máy chiếu (Relay 4): projector_on (cả rooms và relay_control)
+   * Cập nhật điều khiển Máy chiếu (Relay 1): projector_on (cả rooms và relay_control)
    */
   public async updateProjector(code: string, projector_on: boolean): Promise<boolean> {
-    const rcRes = await this.updateRelayControl(code, { relay4_quat: projector_on, auto_mode: false });
+    const rcRes = await this.updateRelayControl(code, { relay1_maychieu: projector_on, auto_mode: false });
     const roomOk = await this.updateRoom(code, { projector_on });
     return rcRes.success && roomOk;
   }
 
   /**
-   * Cập nhật điều khiển Quạt (Relay 1): fan_on (cả rooms và relay_control)
+   * Cập nhật điều khiển Quạt (Relay 4): fan_on (cả rooms và relay_control)
    */
   public async updateFan(code: string, fan_on: boolean): Promise<boolean> {
-    const rcRes = await this.updateRelayControl(code, { relay1_maychieu: fan_on, auto_mode: false });
+    const rcRes = await this.updateRelayControl(code, { relay4_quat: fan_on, auto_mode: false });
     const roomOk = await this.updateRoom(code, { fan_on });
     return rcRes.success && roomOk;
   }
@@ -1136,6 +1289,7 @@ class SupabaseService {
    * Cập nhật Công tắc Điện phòng / Cắt điện khẩn cấp: power_on (cả rooms và relay_control)
    */
   public async updatePower(code: string, power_on: boolean): Promise<boolean> {
+    this.setPendingPowerOverride(code, power_on);
     let rcSuccess = true;
     if (!power_on) {
       const rcRes = await this.updateRelayControl(code, {

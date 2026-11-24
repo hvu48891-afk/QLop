@@ -766,10 +766,10 @@ export default function App() {
 
     if (relaysChanged) {
       const rcRes = await supabaseService.updateRelayControl(roomCode, {
-        relay1_maychieu: safeUpdated.devices.fan.isOn,
-        relay2_den: safeUpdated.devices.ac.isOn,
-        relay3_dieuhoa: safeUpdated.devices.light.isOn,
-        relay4_quat: safeUpdated.devices.projector.isOn,
+        relay1_maychieu: safeUpdated.devices.projector.isOn,
+        relay2_den: safeUpdated.devices.light.isOn,
+        relay3_dieuhoa: safeUpdated.devices.ac.isOn,
+        relay4_quat: safeUpdated.devices.fan.isOn,
         khan_cap: safeUpdated.relayAlarm,
         auto_mode: false,
       });
@@ -837,21 +837,13 @@ export default function App() {
     let label = '';
 
     if (relayType === 'relay1_maychieu') {
-      newState = customState !== undefined ? customState : !targetRoom.devices.fan.isOn;
-      updatedDevices.fan = {
-        ...updatedDevices.fan,
+      newState = customState !== undefined ? customState : !targetRoom.devices.projector.isOn;
+      updatedDevices.projector = {
+        ...updatedDevices.projector,
         isOn: newState,
-        speed: newState ? (updatedDevices.fan.speed || 2) : 0,
       };
-      label = `Relay 1 (Quạt): ${newState ? 'BẬT' : 'TẮT'}`;
+      label = `Relay 1 (Máy chiếu): ${newState ? 'BẬT' : 'TẮT'}`;
     } else if (relayType === 'relay2_den') {
-      newState = customState !== undefined ? customState : !targetRoom.devices.ac.isOn;
-      updatedDevices.ac = {
-        ...updatedDevices.ac,
-        isOn: newState,
-      };
-      label = `Relay 2 (Điều hòa): ${newState ? 'BẬT' : 'TẮT'}`;
-    } else if (relayType === 'relay3_dieuhoa') {
       newState = customState !== undefined ? customState : !targetRoom.devices.light.isOn;
       updatedDevices.light = {
         ...updatedDevices.light,
@@ -859,14 +851,22 @@ export default function App() {
         brightness: newState ? (updatedDevices.light.brightness || 85) : 0,
         preset: newState ? (updatedDevices.light.preset === 'off' ? 'study' : updatedDevices.light.preset) : 'off',
       };
-      label = `Relay 3 (Đèn): ${newState ? 'BẬT' : 'TẮT'}`;
-    } else if (relayType === 'relay4_quat') {
-      newState = customState !== undefined ? customState : !targetRoom.devices.projector.isOn;
-      updatedDevices.projector = {
-        ...updatedDevices.projector,
+      label = `Relay 2 (Đèn): ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'relay3_dieuhoa') {
+      newState = customState !== undefined ? customState : !targetRoom.devices.ac.isOn;
+      updatedDevices.ac = {
+        ...updatedDevices.ac,
         isOn: newState,
       };
-      label = `Relay 4 (Máy chiếu): ${newState ? 'BẬT' : 'TẮT'}`;
+      label = `Relay 3 (Điều hòa): ${newState ? 'BẬT' : 'TẮT'}`;
+    } else if (relayType === 'relay4_quat') {
+      newState = customState !== undefined ? customState : !targetRoom.devices.fan.isOn;
+      updatedDevices.fan = {
+        ...updatedDevices.fan,
+        isOn: newState,
+        speed: newState ? (updatedDevices.fan.speed || 2) : 0,
+      };
+      label = `Relay 4 (Quạt): ${newState ? 'BẬT' : 'TẮT'}`;
     } else if (relayType === 'relay_alarm' || relayType === 'khan_cap') {
       newState = customState !== undefined ? customState : !(targetRoom.relayControl?.khan_cap ?? targetRoom.relayAlarm);
       newRelayAlarm = newState;
@@ -894,14 +894,16 @@ export default function App() {
 
     if (settings.soundEnabled) soundManager.playSwitch(newState);
 
+    supabaseService.setPendingRelayOverride(targetCode, relayType, newState);
+
     const optimisticRc: DbRelayControl = {
       id: targetRoom.relayControl?.id ?? 0,
       room_code: targetCode,
       auto_mode: nextAutoMode,
-      relay1_maychieu: updatedDevices.fan.isOn,
-      relay2_den: updatedDevices.ac.isOn,
-      relay3_dieuhoa: updatedDevices.light.isOn,
-      relay4_quat: updatedDevices.projector.isOn,
+      relay1_maychieu: updatedDevices.projector.isOn,
+      relay2_den: updatedDevices.light.isOn,
+      relay3_dieuhoa: updatedDevices.ac.isOn,
+      relay4_quat: updatedDevices.fan.isOn,
       khan_cap: newRelayAlarm,
       updated_at: new Date().toISOString(),
       state_relay1_maychieu: targetRoom.relayControl?.state_relay1_maychieu ?? false,
@@ -962,6 +964,7 @@ export default function App() {
 
     const targetCode = target.code || target.id;
     const newState = !target.isPowerOn;
+    supabaseService.setPendingPowerOverride(targetCode, newState);
     if (settings.soundEnabled) {
       soundManager.playSwitch(newState);
     }
@@ -1015,6 +1018,7 @@ export default function App() {
 
     const targetCode = target.code || target.id;
     const powerState = !cutOff;
+    supabaseService.setPendingPowerOverride(targetCode, powerState);
     if (settings.soundEnabled) {
       if (cutOff) {
         soundManager.playEmergencyCut();
@@ -1074,6 +1078,7 @@ export default function App() {
     lastLocalWriteAtRef.current = Date.now();
     const isEmergency = true;
     const currentRooms = roomsRef.current;
+    currentRooms.forEach((r) => supabaseService.setPendingPowerOverride(r.code || r.id, false));
     const updatedRooms = currentRooms.map((r) => ({
       ...r,
       isPowerOn: false,
@@ -1142,6 +1147,7 @@ export default function App() {
   const handleSchoolWidePowerRestore = async () => {
     lastLocalWriteAtRef.current = Date.now();
     const currentRooms = roomsRef.current;
+    currentRooms.forEach((r) => supabaseService.setPendingPowerOverride(r.code || r.id, true));
     const updatedRooms = currentRooms.map((r) => ({
       ...r,
       isPowerOn: true,
@@ -1264,6 +1270,7 @@ export default function App() {
       return;
     }
 
+    emptyPoweredRooms.forEach((r) => supabaseService.setPendingPowerOverride(r.code || r.id, false));
     const updatedRooms = roomsRef.current.map((r) => {
       if (!r.isOccupied && r.isPowerOn) {
         return {
@@ -1732,16 +1739,16 @@ export default function App() {
         await supabaseService.updateAc(code, true, 24, 'cool');
       } else if (rule.action === 'turn_off_ac_proj') {
         await supabaseService.updateRelayControl(code, {
-          relay2_den: false, // Relay 2 = Điều hòa
-          relay4_quat: false, // Relay 4 = Máy chiếu
+          relay1_maychieu: false, // Relay 1 = Máy chiếu
+          relay3_dieuhoa: false, // Relay 3 = Điều hòa
           auto_mode: false,
         });
         await supabaseService.updateRoom(code, { ac_on: false, projector_on: false });
       } else if (rule.action === 'mode_study') {
         if (!r.isPowerOn || r.emergencyPowerCut) continue;
         await supabaseService.updateRelayControl(code, {
-          relay1_maychieu: true, // Relay 1 = Quạt
-          relay3_dieuhoa: true, // Relay 3 = Đèn
+          relay2_den: true, // Relay 2 = Đèn
+          relay4_quat: true, // Relay 4 = Quạt
           auto_mode: false,
         });
         await supabaseService.updateRoom(code, {
@@ -1754,9 +1761,9 @@ export default function App() {
       } else if (rule.action === 'mode_presentation') {
         if (!r.isPowerOn || r.emergencyPowerCut) continue;
         await supabaseService.updateRelayControl(code, {
-          relay2_den: true, // Relay 2 = Điều hòa
-          relay3_dieuhoa: true, // Relay 3 = Đèn
-          relay4_quat: true, // Relay 4 = Máy chiếu
+          relay1_maychieu: true, // Relay 1 = Máy chiếu
+          relay2_den: true, // Relay 2 = Đèn
+          relay3_dieuhoa: true, // Relay 3 = Điều hòa
           auto_mode: false,
         });
         await supabaseService.updateRoom(code, {
@@ -2425,10 +2432,10 @@ export default function App() {
           });
           await supabaseService.updateRelayControl(newRoom.id, {
             auto_mode: false,
-            relay1_maychieu: newRoom.devices.fan.isOn, // Relay 1 = Quạt
-            relay2_den: newRoom.devices.ac.isOn, // Relay 2 = Điều hòa
-            relay3_dieuhoa: newRoom.devices.light.isOn, // Relay 3 = Đèn
-            relay4_quat: false, // Relay 4 = Máy chiếu
+            relay1_maychieu: false, // Relay 1 = Máy chiếu
+            relay2_den: newRoom.devices.light.isOn, // Relay 2 = Đèn
+            relay3_dieuhoa: newRoom.devices.ac.isOn, // Relay 3 = Điều hòa
+            relay4_quat: newRoom.devices.fan.isOn, // Relay 4 = Quạt
             khan_cap: false,
           });
           lastLocalWriteAtRef.current = Date.now();

@@ -613,24 +613,24 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <td className="py-2.5 px-3 font-sans whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-[10px] flex-nowrap">
                           <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
-                            log.relay1_maychieu ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
+                            log.relay1_maychieu ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
-                            R1 Quạt: {log.relay1_maychieu ? 'Bật' : 'Tắt'}
+                            R1 Chiếu: {log.relay1_maychieu ? 'Bật' : 'Tắt'}
                           </span>
                           <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
-                            log.relay2_den ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-500'
+                            log.relay2_den ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
-                            R2 Lạnh: {log.relay2_den ? 'Bật' : 'Tắt'}
+                            R2 Đèn: {log.relay2_den ? 'Bật' : 'Tắt'}
                           </span>
                           <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
-                            log.relay3_dieuhoa ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-950 text-slate-500'
+                            log.relay3_dieuhoa ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
-                            R3 Đèn: {log.relay3_dieuhoa ? 'Bật' : 'Tắt'}
+                            R3 Lạnh: {log.relay3_dieuhoa ? 'Bật' : 'Tắt'}
                           </span>
                           <span className={`px-2 py-0.5 rounded font-semibold whitespace-nowrap ${
-                            log.relay4_quat ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-slate-950 text-slate-500'
+                            log.relay4_quat ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-950 text-slate-500'
                           }`}>
-                            R4 Chiếu: {log.relay4_quat ? 'Bật' : 'Tắt'}
+                            R4 Quạt: {log.relay4_quat ? 'Bật' : 'Tắt'}
                           </span>
                         </div>
                       </td>
